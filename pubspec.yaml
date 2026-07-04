@@ -40,6 +40,11 @@ dependencies:
   shared_preferences: ^2.2.2  # অটো-লগিনের জন্য নতুন প্যাকেজ
 
 
+  # 🔥 এই ৩টি লাইন নতুন করে বসাবেন
+  firebase_core: ^3.1.0
+  firebase_auth: ^5.0.0
+  cloud_firestore: ^5.0.0
+
 
 dev_dependencies:
   flutter_test:

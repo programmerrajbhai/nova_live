@@ -1,3 +1,16 @@
+// একদম উপরে এই buildscript অংশটুকু বসাবেন
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        // ফায়ারবেস যেন কাজ করে তার জন্য এই লাইন
+        classpath("com.google.gms:google-services:4.4.1")
+    }
+}
+
+
 allprojects {
     repositories {
         google()

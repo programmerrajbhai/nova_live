@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "462271142646",
+    "project_id": "novalive-3b1c3",
+    "storage_bucket": "novalive-3b1c3.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:462271142646:android:9105a72e24c13a2f13ead7",
+        "android_client_info": {
+          "package_name": "com.novatechsoft.nova_live"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBKT6sxCQSjtPSZvaun1h1J1UiDorer814"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -152,6 +152,7 @@ class ProfileView extends StatelessWidget {
                       )),
                     ],
                   ),
+
                   Container(
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(colors: [Colors.orangeAccent, Colors.deepOrangeAccent]),

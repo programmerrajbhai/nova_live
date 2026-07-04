@@ -1,6 +1,8 @@
 import 'package:get/get.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // 🔥 ফায়ারবেস অথেনটিকেশন
+import 'package:cloud_firestore/cloud_firestore.dart'; // 🔥 ফায়ারবেস ফায়ারস্টোর
 import '../../main_nav/view/main_nav_view.dart';
 
 class AuthController extends GetxController {
@@ -13,13 +15,12 @@ class AuthController extends GetxController {
   var dobString = ''.obs;
   var calculatedAge = 0.obs;
 
-  // 🔥 ডিফল্ট অবতার লিস্ট এবং সিলেকশন স্টেট
   final List<String> defaultAvatars = [
-    'https://cdn-icons-png.flaticon.com/512/3135/3135715.png', // Male 1
-    'https://cdn-icons-png.flaticon.com/512/3135/3135789.png', // Female 1
-    'https://cdn-icons-png.flaticon.com/512/4140/4140048.png', // Female 2
-    'https://cdn-icons-png.flaticon.com/512/4140/4140037.png', // Male 2
-    'https://cdn-icons-png.flaticon.com/512/4140/4140047.png', // Boy
+    'https://cdn-icons-png.flaticon.com/512/3135/3135715.png',
+    'https://cdn-icons-png.flaticon.com/512/3135/3135789.png',
+    'https://cdn-icons-png.flaticon.com/512/4140/4140048.png',
+    'https://cdn-icons-png.flaticon.com/512/4140/4140037.png',
+    'https://cdn-icons-png.flaticon.com/512/4140/4140047.png',
   ];
   var selectedAvatar = ''.obs;
 
@@ -38,10 +39,8 @@ class AuthController extends GetxController {
 
     if (hasAccount) {
       isLoading.value = true;
-      await Future.delayed(const Duration(seconds: 1));
-
-      await prefs.setBool('isLoggedIn', true);
       String name = prefs.getString('userName') ?? 'User';
+      await prefs.setBool('isLoggedIn', true);
 
       isLoading.value = false;
       Get.offAll(() => MainNavView(), transition: Transition.zoom);
@@ -51,7 +50,7 @@ class AuthController extends GetxController {
       selectedGender.value = 'Male';
       dobString.value = '';
       calculatedAge.value = 0;
-      selectedAvatar.value = defaultAvatars[0]; // ডিফল্টভাবে প্রথম অবতার সিলেক্টেড থাকবে
+      selectedAvatar.value = defaultAvatars[0];
 
       _showProfileSetupSheet();
     }
@@ -111,7 +110,6 @@ class AuthController extends GetxController {
             const Text('Complete Profile', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
             const SizedBox(height: 15),
 
-            // 🔥 অবতার সিলেকশন সেকশন
             const Align(
               alignment: Alignment.centerLeft,
               child: Text('Choose Avatar', style: TextStyle(color: Colors.grey, fontSize: 13, fontWeight: FontWeight.bold)),
@@ -132,17 +130,10 @@ class AuthController extends GetxController {
                         padding: const EdgeInsets.all(3),
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          border: Border.all(
-                            color: isSelected ? Colors.purpleAccent : Colors.transparent,
-                            width: 3,
-                          ),
+                          border: Border.all(color: isSelected ? Colors.purpleAccent : Colors.transparent, width: 3),
                           boxShadow: isSelected ? [BoxShadow(color: Colors.purpleAccent.withOpacity(0.5), blurRadius: 10)] : [],
                         ),
-                        child: CircleAvatar(
-                          radius: 30,
-                          backgroundColor: Colors.white10,
-                          backgroundImage: NetworkImage(defaultAvatars[index]),
-                        ),
+                        child: CircleAvatar(radius: 30, backgroundColor: Colors.white10, backgroundImage: NetworkImage(defaultAvatars[index])),
                       );
                     }),
                   );
@@ -233,6 +224,7 @@ class AuthController extends GetxController {
     );
   }
 
+  // 🔥 এখানেই আসল ফায়ারবেস ম্যাজিক হচ্ছে
   Future<void> _validateAndJoin() async {
     String name = nameController.text.trim();
 
@@ -245,26 +237,45 @@ class AuthController extends GetxController {
       return;
     }
     if (calculatedAge.value < 18) {
-      Get.snackbar('Access Denied 🚫', 'You must be at least 18 years old to use Nova Live.', snackPosition: SnackPosition.TOP, backgroundColor: Colors.redAccent, colorText: Colors.white);
+      Get.snackbar('Access Denied 🚫', 'You must be at least 18 years old.', snackPosition: SnackPosition.TOP, backgroundColor: Colors.redAccent, colorText: Colors.white);
       return;
     }
 
     isLoading.value = true;
-    await Future.delayed(const Duration(seconds: 2));
 
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('hasAccount', true);
-    await prefs.setBool('isLoggedIn', true);
-    await prefs.setString('userName', name);
-    await prefs.setString('userGender', selectedGender.value);
-    await prefs.setString('userDOB', dobString.value);
-    await prefs.setString('userAvatar', selectedAvatar.value); // 🔥 অবতার সেভ করা হলো
+    try {
+      // ১. ফায়ারবেস অথেনটিকেশন (সিকিউর ইউজার আইডি তৈরি)
+      UserCredential userCredential = await FirebaseAuth.instance.signInAnonymously();
+      String uid = userCredential.user!.uid;
 
-    isLoading.value = false;
-    Get.back();
+      // ২. ফায়ারবেস ফায়ারস্টোরে ইউজারের ডেটা সেভ করা
+      await FirebaseFirestore.instance.collection('users').doc(uid).set({
+        'uid': uid,
+        'name': name,
+        'gender': selectedGender.value,
+        'dob': dobString.value,
+        'avatar': selectedAvatar.value,
+        'coins': 500, // নতুন ইউজারদের জন্য ৫০০ কয়েন বোনাস!
+        'totalEarnings': 0.0,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
 
-    Get.offAll(() => MainNavView(), transition: Transition.zoom);
-    Get.snackbar('Welcome $name! 🎉', 'Your account has been created successfully.', backgroundColor: Colors.green, colorText: Colors.white);
+      // ৩. লোকাল স্টোরেজে সেশন সেভ করা
+      SharedPreferences prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('hasAccount', true);
+      await prefs.setBool('isLoggedIn', true);
+      await prefs.setString('uid', uid); // UID সেভ রাখলাম প্রোফাইলে ডেটা টানার জন্য
+
+      isLoading.value = false;
+      Get.back(); // বটম শিট ক্লোজ
+
+      Get.offAll(() => MainNavView(), transition: Transition.zoom);
+      Get.snackbar('Welcome $name! 🎉', 'Account created successfully in Firebase.', backgroundColor: Colors.green, colorText: Colors.white);
+
+    } catch (e) {
+      isLoading.value = false;
+      Get.snackbar('Error', 'Failed to save data: $e', backgroundColor: Colors.redAccent, colorText: Colors.white);
+    }
   }
 
   @override

@@ -1,9 +1,16 @@
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'features/splash/splash_view.dart'; // নতুন স্প্ল্যাশ স্ক্রিন
 
-void main() {
+Future<void> main() async {
+  // ১. ফ্লাটার ইঞ্জিন রেডি করা
   WidgetsFlutterBinding.ensureInitialized();
+
+  // ২. ফায়ারবেস চালু করা (ইনিশিয়ালাইজ)
+  await Firebase.initializeApp();
+
   runApp(const NovaLiveApp());
 }
 
