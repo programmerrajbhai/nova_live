@@ -37,6 +37,10 @@ dependencies:
 
   font_awesome_flutter: ^10.7.0 # কালারফুল ও প্রফেশনাল আইকনের জন্য
   get: ^4.6.6
+  shared_preferences: ^2.2.2  # অটো-লগিনের জন্য নতুন প্যাকেজ
+
+
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

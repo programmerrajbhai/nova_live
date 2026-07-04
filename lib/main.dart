@@ -1,10 +1,9 @@
-// lib/main.dart
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-
-import 'features/onboarding/view/onboarding_view.dart';
+import 'features/splash/splash_view.dart'; // নতুন স্প্ল্যাশ স্ক্রিন
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
   runApp(const NovaLiveApp());
 }
 
@@ -21,7 +20,8 @@ class NovaLiveApp extends StatelessWidget {
         scaffoldBackgroundColor: const Color(0xFF121212),
         primarySwatch: Colors.deepPurple,
       ),
-      home: OnboardingView(), // সরাসরি ভিউ কল করা হলো
+      // সরাসরি স্প্ল্যাশ স্ক্রিনে যাবে
+      home: SplashView(),
     );
   }
 }
