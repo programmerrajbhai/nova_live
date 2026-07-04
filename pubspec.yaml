@@ -45,6 +45,11 @@ dependencies:
   firebase_auth: ^5.0.0
   cloud_firestore: ^5.0.0
 
+  # 🔥 Permission Handler (আপডেট করা হলো ZegoCloud-এর রিকোয়ারমেন্ট অনুযায়ী)
+  permission_handler: ^12.0.3
+
+  # 🔥 ZegoCloud
+  zego_uikit_prebuilt_call: ^4.24.2
 
 dev_dependencies:
   flutter_test:

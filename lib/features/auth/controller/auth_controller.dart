@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart'; // 🔥 ফায়ারবেস অথেনটিকেশন
 import 'package:cloud_firestore/cloud_firestore.dart'; // 🔥 ফায়ারবেস ফায়ারস্টোর
+import 'package:permission_handler/permission_handler.dart'; // 🔥 পারমিশন প্যাকেজ
 import '../../main_nav/view/main_nav_view.dart';
 
 class AuthController extends GetxController {
@@ -39,12 +40,12 @@ class AuthController extends GetxController {
 
     if (hasAccount) {
       isLoading.value = true;
-      String name = prefs.getString('userName') ?? 'User';
       await prefs.setBool('isLoggedIn', true);
-
       isLoading.value = false;
-      Get.offAll(() => MainNavView(), transition: Transition.zoom);
-      Get.snackbar('Welcome Back $name! 🎉', 'Logged in successfully.', backgroundColor: Colors.green, colorText: Colors.white);
+
+      // 🔥 সরাসরি হোম পেজে না গিয়ে আগে পারমিশন চেক করবে
+      _checkPermissionsAndNavigate();
+
     } else {
       nameController.clear();
       selectedGender.value = 'Male';
@@ -224,7 +225,6 @@ class AuthController extends GetxController {
     );
   }
 
-  // 🔥 এখানেই আসল ফায়ারবেস ম্যাজিক হচ্ছে
   Future<void> _validateAndJoin() async {
     String name = nameController.text.trim();
 
@@ -244,38 +244,109 @@ class AuthController extends GetxController {
     isLoading.value = true;
 
     try {
-      // ১. ফায়ারবেস অথেনটিকেশন (সিকিউর ইউজার আইডি তৈরি)
       UserCredential userCredential = await FirebaseAuth.instance.signInAnonymously();
       String uid = userCredential.user!.uid;
 
-      // ২. ফায়ারবেস ফায়ারস্টোরে ইউজারের ডেটা সেভ করা
       await FirebaseFirestore.instance.collection('users').doc(uid).set({
         'uid': uid,
         'name': name,
         'gender': selectedGender.value,
         'dob': dobString.value,
         'avatar': selectedAvatar.value,
-        'coins': 500, // নতুন ইউজারদের জন্য ৫০০ কয়েন বোনাস!
+        'coins': 500,
         'totalEarnings': 0.0,
         'createdAt': FieldValue.serverTimestamp(),
       });
 
-      // ৩. লোকাল স্টোরেজে সেশন সেভ করা
       SharedPreferences prefs = await SharedPreferences.getInstance();
       await prefs.setBool('hasAccount', true);
       await prefs.setBool('isLoggedIn', true);
-      await prefs.setString('uid', uid); // UID সেভ রাখলাম প্রোফাইলে ডেটা টানার জন্য
+      await prefs.setString('uid', uid);
+      await prefs.setString('userName', name); // ইউজারের নাম সেভ করে রাখলাম
 
       isLoading.value = false;
-      Get.back(); // বটম শিট ক্লোজ
+      Get.back();
 
-      Get.offAll(() => MainNavView(), transition: Transition.zoom);
-      Get.snackbar('Welcome $name! 🎉', 'Account created successfully in Firebase.', backgroundColor: Colors.green, colorText: Colors.white);
+      // 🔥 অ্যাকাউন্ট খোলার পর পারমিশন চেক করতে পাঠাবে
+      _checkPermissionsAndNavigate();
 
     } catch (e) {
       isLoading.value = false;
       Get.snackbar('Error', 'Failed to save data: $e', backgroundColor: Colors.redAccent, colorText: Colors.white);
     }
+  }
+
+  // ==========================================
+  // 🔥 Google Play Policy Compliant Permission Flow
+  // ==========================================
+
+  Future<void> _checkPermissionsAndNavigate() async {
+    var cameraStatus = await Permission.camera.status;
+    var micStatus = await Permission.microphone.status;
+
+    if (cameraStatus.isGranted && micStatus.isGranted) {
+      _goToHome();
+    } else {
+      _showProminentDisclosureDialog();
+    }
+  }
+
+  void _showProminentDisclosureDialog() {
+    Get.dialog(
+      AlertDialog(
+        backgroundColor: const Color(0xFF1E1E1E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Row(
+          children: [
+            Icon(Icons.security, color: Colors.purpleAccent),
+            SizedBox(width: 10),
+            Text('Permissions Required', style: TextStyle(color: Colors.white, fontSize: 18)),
+          ],
+        ),
+        content: const Text(
+          'To connect you with random matches via live video and audio calls, Nova Live requires access to your Camera and Microphone.\n\nWe strictly protect your privacy and do not record or store your personal calls on our servers.',
+          style: TextStyle(color: Colors.white70, height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Get.back();
+              _goToHome();
+            },
+            child: const Text('Not Now', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.purpleAccent,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+            onPressed: () async {
+              Get.back();
+              _requestSystemPermissions();
+            },
+            child: const Text('Allow Access', style: TextStyle(color: Colors.white)),
+          ),
+        ],
+      ),
+      barrierDismissible: false,
+    );
+  }
+
+  Future<void> _requestSystemPermissions() async {
+    await [
+      Permission.camera,
+      Permission.microphone,
+    ].request();
+
+    _goToHome();
+  }
+
+  void _goToHome() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    String name = prefs.getString('userName') ?? 'User';
+
+    Get.offAll(() => MainNavView(), transition: Transition.zoom);
+    Get.snackbar('Welcome $name! 🎉', 'You are ready to match!', backgroundColor: Colors.green, colorText: Colors.white);
   }
 
   @override
