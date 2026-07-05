@@ -50,6 +50,7 @@ dependencies:
 
   # 🔥 ZegoCloud
   zego_uikit_prebuilt_call: ^4.24.2
+  zego_uikit_prebuilt_live_audio_room: ^3.16.10
 
 dev_dependencies:
   flutter_test:

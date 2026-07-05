@@ -1,28 +1,86 @@
-import 'package:get/get.dart';
 import 'package:flutter/material.dart';
-import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-import '../model/audio_room_model.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:get/get.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../view/active_audio_room_view.dart';
 
 class AudioRoomController extends GetxController {
-  var roomList = <AudioRoom>[].obs;
+  final FirebaseFirestore _db = FirebaseFirestore.instance;
+
+  var myUid = ''.obs;
+  var myName = ''.obs;
+  var myAvatar = ''.obs;
+  var isCreatingRoom = false.obs;
 
   @override
   void onInit() {
     super.onInit();
-    fetchRooms();
+    _loadUserData();
   }
 
-  void fetchRooms() {
-    roomList.value = [
-      AudioRoom(id: '1', roomName: 'Midnight Chill 🌙', topic: 'Music & Adda', activeUsers: 45, icon: FontAwesomeIcons.music, iconColor: Colors.orangeAccent),
-      AudioRoom(id: '2', roomName: 'Singles Cafe ☕', topic: 'Friendship', activeUsers: 120, icon: FontAwesomeIcons.mugHot, iconColor: Colors.pinkAccent),
-      AudioRoom(id: '3', roomName: 'Tech Talk BD 💻', topic: 'Technology', activeUsers: 15, icon: FontAwesomeIcons.laptopCode, iconColor: Colors.cyanAccent),
-    ];
+  Future<void> _loadUserData() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    myUid.value = prefs.getString('uid') ?? '';
+
+    if (myUid.value.isNotEmpty) {
+      DocumentSnapshot doc = await _db.collection('users').doc(myUid.value).get();
+      if (doc.exists) {
+        myName.value = doc['name'] ?? 'Nova User';
+        myAvatar.value = doc['avatar'] ?? '';
+      }
+    }
   }
 
-  void joinRoom(AudioRoom room) {
-    // সরাসরি নতুন পেজে নেভিগেশন (Zoom ট্রানজিশন সহ)
-    Get.to(() => ActiveAudioRoomView(room: room), transition: Transition.zoom);
+  Stream<QuerySnapshot> getLiveRoomsStream() {
+    return _db
+        .collection('live_audio_rooms')
+        .orderBy('createdAt', descending: true)
+        .snapshots();
+  }
+
+  // 🔥 কাস্টম রুমের নাম রিসিভ করার জন্য আপডেট করা হলো
+  Future<void> startMyRoom(String customRoomName) async {
+    if (myUid.value.isEmpty) return;
+
+    isCreatingRoom.value = true;
+    String roomId = 'room_${myUid.value}';
+    String finalRoomName = customRoomName.isEmpty ? "${myName.value}'s Adda 🎙️" : customRoomName;
+
+    try {
+      await _db.collection('live_audio_rooms').doc(roomId).set({
+        'roomId': roomId,
+        'hostId': myUid.value,
+        'hostName': myName.value,
+        'hostAvatar': myAvatar.value,
+        'roomName': finalRoomName, // ইউজারের দেওয়া নাম সেভ হবে
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      isCreatingRoom.value = false;
+
+      Get.to(() => ActiveAudioRoomView(
+        roomId: roomId,
+        roomName: finalRoomName,
+        isHost: true,
+        userId: myUid.value,
+        userName: myName.value,
+        userAvatar: myAvatar.value,
+      ));
+
+    } catch (e) {
+      isCreatingRoom.value = false;
+      Get.snackbar('Error', 'Failed to start room: $e', backgroundColor: const Color(0xFFFF5252), colorText: const Color(0xFFFFFFFF));
+    }
+  }
+
+  void joinRoom(String roomId, String roomName) {
+    Get.to(() => ActiveAudioRoomView(
+      roomId: roomId,
+      roomName: roomName,
+      isHost: false,
+      userId: myUid.value,
+      userName: myName.value,
+      userAvatar: myAvatar.value,
+    ));
   }
 }

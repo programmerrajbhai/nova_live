@@ -422,6 +422,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.0.0+4"
+  flutter_styled_toast:
+    dependency: transitive
+    description:
+      name: flutter_styled_toast
+      sha256: "94aa40eb706ad0d03483e2255901902d3584aa5abc8659295cc1040d2c153e0a"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.3.0"
   flutter_test:
     dependency: "direct dev"
     description: flutter
@@ -1269,6 +1277,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.24.2"
+  zego_uikit_prebuilt_live_audio_room:
+    dependency: "direct main"
+    description:
+      name: zego_uikit_prebuilt_live_audio_room
+      sha256: "0fbec05da3f716e0dfb5d137eb2aca93fd4f49e6db15cc7dfdfbecc1b660a07b"
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.16.10"
   zego_uikit_signaling_plugin:
     dependency: transitive
     description:
