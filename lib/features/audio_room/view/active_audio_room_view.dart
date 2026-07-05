@@ -29,7 +29,6 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
 
   @override
   void dispose() {
-    // Host room theke ber hole firebase theke auto delete hoye jabe
     if (widget.isHost) {
       FirebaseFirestore.instance.collection('live_audio_rooms').doc(widget.roomId).delete();
     }
@@ -39,22 +38,20 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
   @override
   Widget build(BuildContext context) {
 
-    // 1. Role onujayi config
     ZegoUIKitPrebuiltLiveAudioRoomConfig config = widget.isHost
         ? ZegoUIKitPrebuiltLiveAudioRoomConfig.host()
         : ZegoUIKitPrebuiltLiveAudioRoomConfig.audience();
 
-    // 2. Custom Background and Title (Premium Design)
     config.background = Stack(
       children: [
         Container(
           decoration: const BoxDecoration(
             image: DecorationImage(
-              image: NetworkImage('https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=1000&auto=format&fit=crop'), // Background Image
+              image: NetworkImage('https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=1000&auto=format&fit=crop'),
               fit: BoxFit.cover,
             ),
           ),
-          child: Container(color: Colors.black.withOpacity(0.6)), // Image er upore halka kalo shadow
+          child: Container(color: Colors.black.withOpacity(0.6)),
         ),
         Positioned(
           top: 50,
@@ -83,10 +80,10 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
       ],
     );
 
-    // 3. Seat Settings
-    config.seat.hostIndexes = [0]; // Host always 1st seat e bosbe
+    if (widget.isHost) {
+      config.seat.hostIndexes = [0];
+    }
 
-    // 4. Seat Layout (4+4 = 8 seats)
     config.seat.layout = ZegoLiveAudioRoomLayoutConfig(
       rowConfigs: [
         ZegoLiveAudioRoomLayoutRowConfig(count: 4, alignment: ZegoLiveAudioRoomLayoutAlignment.spaceAround),
@@ -94,32 +91,24 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
       ],
     );
 
-    // 🔥 5. MASTER FIX: Seat Change and Join Error Fix (Safe Avatar Builder)
     config.seat.avatarBuilder = (BuildContext context, Size size, ZegoUIKitUser? user, Map<String, dynamic> extraInfo) {
-
-      // ✅ Error Boundary: Seat change korar somoy user data load hote deri hole error asbe na
       if (user == null || user.name.isEmpty) {
         return const SizedBox();
       }
 
-      // User er namer prothom okkhor ber kora (chobi na thakle etai dekhabe)
       String firstLetter = user.name.trim().isNotEmpty ? user.name.trim().substring(0, 1).toUpperCase() : 'U';
 
       return Container(
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          border: Border.all(color: Colors.purpleAccent, width: 2), // Seat er charpashe premium border
+          border: Border.all(color: Colors.purpleAccent, width: 2),
         ),
         child: CircleAvatar(
           radius: size.width / 2,
           backgroundColor: const Color(0xFF2A2A2A),
-
-          // Nijer seat hole firebase theke asa chobi dekhabe
           backgroundImage: (user.id == widget.userId && widget.userAvatar.isNotEmpty)
               ? NetworkImage(widget.userAvatar)
               : null,
-
-          // Onno user ba chobi na thakle namer 1st letter dekhabe
           child: (user.id != widget.userId || widget.userAvatar.isEmpty)
               ? Text(
               firstLetter,
