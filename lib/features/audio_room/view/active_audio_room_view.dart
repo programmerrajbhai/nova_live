@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:zego_uikit_prebuilt_live_audio_room/zego_uikit_prebuilt_live_audio_room.dart';
 import 'package:zego_uikit/zego_uikit.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:zego_uikit_signaling_plugin/zego_uikit_signaling_plugin.dart';
 
 class ActiveAudioRoomView extends StatefulWidget {
   final String roomId;
@@ -12,31 +13,79 @@ class ActiveAudioRoomView extends StatefulWidget {
   final String userAvatar;
 
   const ActiveAudioRoomView({
-    Key? key,
+    super.key,
     required this.roomId,
     required this.roomName,
     required this.isHost,
     required this.userId,
     required this.userName,
     required this.userAvatar,
-  }) : super(key: key);
+  });
 
   @override
   State<ActiveAudioRoomView> createState() => _ActiveAudioRoomViewState();
 }
 
 class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
+  // সার্ভার রেডি হওয়ার স্ট্যাটাস চেক করার ভেরিয়েবল
+  bool isZimReady = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _connectZIMFirst();
+  }
+
+  Future<void> _connectZIMFirst() async {
+    try {
+      // ১. প্লাগিন ইন্সটল
+      ZegoUIKit().installPlugins([ZegoUIKitSignalingPlugin()]);
+
+      // ২. 🔥 মাস্টার ফিক্স: 'await' বাদ দেওয়া হয়েছে কারণ এটি void ফাংশন
+      ZegoUIKit().login(widget.userId, widget.userName);
+
+      // ৩. সার্ভারকে কানেক্ট হওয়ার জন্য ব্যাকগ্রাউন্ডে ১ সেকেন্ড সময় দিচ্ছি
+      await Future.delayed(const Duration(seconds: 1));
+
+      // ৪. এরপর লোডিং স্ক্রিন সরিয়ে অডিও রুম দেখাবো
+      if (mounted) {
+        setState(() {
+          isZimReady = true;
+        });
+      }
+    } catch (e) {
+      debugPrint("ZIM Login Failed: $e");
+    }
+  }
 
   @override
   void dispose() {
     if (widget.isHost) {
       FirebaseFirestore.instance.collection('live_audio_rooms').doc(widget.roomId).delete();
     }
+    ZegoUIKit().logout();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+
+    // ⏳ যতক্ষণ লগিন না হচ্ছে, ততক্ষণ সুন্দর একটি লোডিং স্ক্রিন দেখাবে
+    if (!isZimReady) {
+      return const Scaffold(
+        backgroundColor: Color(0xFF121212),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              CircularProgressIndicator(color: Colors.purpleAccent),
+              SizedBox(height: 15),
+              Text("Connecting to Seat Server...", style: TextStyle(color: Colors.white70, fontSize: 16)),
+            ],
+          ),
+        ),
+      );
+    }
 
     ZegoUIKitPrebuiltLiveAudioRoomConfig config = widget.isHost
         ? ZegoUIKitPrebuiltLiveAudioRoomConfig.host()
@@ -54,35 +103,19 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
           child: Container(color: Colors.black.withOpacity(0.6)),
         ),
         Positioned(
-          top: 50,
-          left: 20,
+          top: 50, left: 20,
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             decoration: BoxDecoration(
               color: Colors.black54,
               borderRadius: BorderRadius.circular(20),
               border: Border.all(color: Colors.purpleAccent, width: 1),
-              boxShadow: [BoxShadow(color: Colors.purpleAccent.withOpacity(0.3), blurRadius: 10)],
             ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.graphic_eq, color: Colors.purpleAccent, size: 18),
-                const SizedBox(width: 8),
-                Text(
-                  widget.roomName,
-                  style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
+            child: Text(widget.roomName, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
           ),
         ),
       ],
     );
-
-    if (widget.isHost) {
-      config.seat.hostIndexes = [0];
-    }
 
     config.seat.layout = ZegoLiveAudioRoomLayoutConfig(
       rowConfigs: [
@@ -91,10 +124,12 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
       ],
     );
 
+    if (widget.isHost) {
+      config.seat.hostIndexes = [0];
+    }
+
     config.seat.avatarBuilder = (BuildContext context, Size size, ZegoUIKitUser? user, Map<String, dynamic> extraInfo) {
-      if (user == null || user.name.isEmpty) {
-        return const SizedBox();
-      }
+      if (user == null || user.name.isEmpty) return const SizedBox();
 
       String firstLetter = user.name.trim().isNotEmpty ? user.name.trim().substring(0, 1).toUpperCase() : 'U';
 
@@ -110,10 +145,7 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
               ? NetworkImage(widget.userAvatar)
               : null,
           child: (user.id != widget.userId || widget.userAvatar.isEmpty)
-              ? Text(
-              firstLetter,
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18)
-          )
+              ? Text(firstLetter, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18))
               : null,
         ),
       );

@@ -32,27 +32,26 @@ class AudioRoomController extends GetxController {
   }
 
   Stream<QuerySnapshot> getLiveRoomsStream() {
-    return _db
-        .collection('live_audio_rooms')
-        .orderBy('createdAt', descending: true)
-        .snapshots();
+    return _db.collection('live_audio_rooms').orderBy('createdAt', descending: true).snapshots();
   }
 
-  // 🔥 কাস্টম রুমের নাম রিসিভ করার জন্য আপডেট করা হলো
+  // 🔥 মাস্টার ফিক্স ১: ZIM সার্ভারের জন্য ইউজার আইডি সেফ করার লজিক (শুধুমাত্র বর্ণ ও সংখ্যা থাকবে)
+  String get safeUserId => myUid.value.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
+
   Future<void> startMyRoom(String customRoomName) async {
     if (myUid.value.isEmpty) return;
 
     isCreatingRoom.value = true;
-    String roomId = 'room_${myUid.value}';
+    String roomId = 'room_$safeUserId';
     String finalRoomName = customRoomName.isEmpty ? "${myName.value}'s Adda 🎙️" : customRoomName;
 
     try {
       await _db.collection('live_audio_rooms').doc(roomId).set({
         'roomId': roomId,
-        'hostId': myUid.value,
+        'hostId': safeUserId,
         'hostName': myName.value,
         'hostAvatar': myAvatar.value,
-        'roomName': finalRoomName, // ইউজারের দেওয়া নাম সেভ হবে
+        'roomName': finalRoomName,
         'createdAt': FieldValue.serverTimestamp(),
       });
 
@@ -62,14 +61,14 @@ class AudioRoomController extends GetxController {
         roomId: roomId,
         roomName: finalRoomName,
         isHost: true,
-        userId: myUid.value,
+        userId: safeUserId, // সেফ আইডি পাঠানো হচ্ছে
         userName: myName.value,
         userAvatar: myAvatar.value,
       ));
 
     } catch (e) {
       isCreatingRoom.value = false;
-      Get.snackbar('Error', 'Failed to start room: $e', backgroundColor: const Color(0xFFFF5252), colorText: const Color(0xFFFFFFFF));
+      Get.snackbar('Database Error', e.toString(), backgroundColor: Colors.redAccent, colorText: Colors.white);
     }
   }
 
@@ -78,7 +77,7 @@ class AudioRoomController extends GetxController {
       roomId: roomId,
       roomName: roomName,
       isHost: false,
-      userId: myUid.value,
+      userId: safeUserId, // সেফ আইডি পাঠানো হচ্ছে
       userName: myName.value,
       userAvatar: myAvatar.value,
     ));
