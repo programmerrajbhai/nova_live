@@ -27,35 +27,12 @@ class ActiveAudioRoomView extends StatefulWidget {
 }
 
 class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
-  // সার্ভার রেডি হওয়ার স্ট্যাটাস চেক করার ভেরিয়েবল
-  bool isZimReady = false;
 
   @override
   void initState() {
     super.initState();
-    _connectZIMFirst();
-  }
-
-  Future<void> _connectZIMFirst() async {
-    try {
-      // ১. প্লাগিন ইন্সটল
-      ZegoUIKit().installPlugins([ZegoUIKitSignalingPlugin()]);
-
-      // ২. 🔥 মাস্টার ফিক্স: 'await' বাদ দেওয়া হয়েছে কারণ এটি void ফাংশন
-      ZegoUIKit().login(widget.userId, widget.userName);
-
-      // ৩. সার্ভারকে কানেক্ট হওয়ার জন্য ব্যাকগ্রাউন্ডে ১ সেকেন্ড সময় দিচ্ছি
-      await Future.delayed(const Duration(seconds: 1));
-
-      // ৪. এরপর লোডিং স্ক্রিন সরিয়ে অডিও রুম দেখাবো
-      if (mounted) {
-        setState(() {
-          isZimReady = true;
-        });
-      }
-    } catch (e) {
-      debugPrint("ZIM Login Failed: $e");
-    }
+    // সিট ম্যানেজমেন্টের প্লাগিন চালু করা হলো
+    ZegoUIKit().installPlugins([ZegoUIKitSignalingPlugin()]);
   }
 
   @override
@@ -63,62 +40,63 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
     if (widget.isHost) {
       FirebaseFirestore.instance.collection('live_audio_rooms').doc(widget.roomId).delete();
     }
-    ZegoUIKit().logout();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
 
-    // ⏳ যতক্ষণ লগিন না হচ্ছে, ততক্ষণ সুন্দর একটি লোডিং স্ক্রিন দেখাবে
-    if (!isZimReady) {
-      return const Scaffold(
-        backgroundColor: Color(0xFF121212),
-        body: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              CircularProgressIndicator(color: Colors.purpleAccent),
-              SizedBox(height: 15),
-              Text("Connecting to Seat Server...", style: TextStyle(color: Colors.white70, fontSize: 16)),
-            ],
-          ),
-        ),
-      );
+    // সার্ভার লগিন এরর বন্ধ করার জন্য সেফ ইউজার আইডি
+    String safeUserId = widget.userId.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
+    if (safeUserId.isEmpty) {
+      safeUserId = "user_${DateTime.now().millisecondsSinceEpoch}";
     }
 
+    // 🔥 MASTER FIX: .speaker() বাদ দিয়ে .audience() দেওয়া হলো।
+    // অডিয়েন্সরা যেকোনো খালি সিটে ক্লিক করলেই বসতে পারবে!
     ZegoUIKitPrebuiltLiveAudioRoomConfig config = widget.isHost
         ? ZegoUIKitPrebuiltLiveAudioRoomConfig.host()
         : ZegoUIKitPrebuiltLiveAudioRoomConfig.audience();
 
-    config.background = Stack(
-      children: [
-        Container(
-          decoration: const BoxDecoration(
-            image: DecorationImage(
-              image: NetworkImage('https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=1000&auto=format&fit=crop'),
-              fit: BoxFit.cover,
+    // 🎨 প্রিমিয়াম গ্রেডিয়েন্ট ব্যাকগ্রাউন্ড
+    config.background = Container(
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Color(0xFF0F2027), Color(0xFF203A43), Color(0xFF2C5364)],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+        ),
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            top: 50, left: 20, right: 20,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.black.withOpacity(0.3),
+                borderRadius: BorderRadius.circular(30),
+                border: Border.all(color: Colors.cyanAccent.withOpacity(0.5), width: 1),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.podcasts, color: Colors.cyanAccent, size: 20),
+                  const SizedBox(width: 10),
+                  Flexible(child: Text(widget.roomName, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold), overflow: TextOverflow.ellipsis)),
+                ],
+              ),
             ),
           ),
-          child: Container(color: Colors.black.withOpacity(0.6)),
-        ),
-        Positioned(
-          top: 50, left: 20,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.black54,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: Colors.purpleAccent, width: 1),
-            ),
-            child: Text(widget.roomName, style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-          ),
-        ),
-      ],
+        ],
+      ),
     );
 
+    // 🪑 সিট লেআউট: 1 (Host) + 2 + 4 + 4 = 11 সিট
     config.seat.layout = ZegoLiveAudioRoomLayoutConfig(
       rowConfigs: [
+        ZegoLiveAudioRoomLayoutRowConfig(count: 1, alignment: ZegoLiveAudioRoomLayoutAlignment.center),
+        ZegoLiveAudioRoomLayoutRowConfig(count: 2, alignment: ZegoLiveAudioRoomLayoutAlignment.spaceEvenly),
         ZegoLiveAudioRoomLayoutRowConfig(count: 4, alignment: ZegoLiveAudioRoomLayoutAlignment.spaceAround),
         ZegoLiveAudioRoomLayoutRowConfig(count: 4, alignment: ZegoLiveAudioRoomLayoutAlignment.spaceAround),
       ],
@@ -128,26 +106,21 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
       config.seat.hostIndexes = [0];
     }
 
+    // 🖼️ ক্লিন প্রোফাইল (যাতে কথা বলার সময় ভয়েস ওয়েভ বা ঢেউ একদম পারফেক্টলি দেখা যায়)
     config.seat.avatarBuilder = (BuildContext context, Size size, ZegoUIKitUser? user, Map<String, dynamic> extraInfo) {
       if (user == null || user.name.isEmpty) return const SizedBox();
 
-      String firstLetter = user.name.trim().isNotEmpty ? user.name.trim().substring(0, 1).toUpperCase() : 'U';
+      String firstLetter = user.name.trim().substring(0, 1).toUpperCase();
 
-      return Container(
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          border: Border.all(color: Colors.purpleAccent, width: 2),
-        ),
-        child: CircleAvatar(
-          radius: size.width / 2,
-          backgroundColor: const Color(0xFF2A2A2A),
-          backgroundImage: (user.id == widget.userId && widget.userAvatar.isNotEmpty)
-              ? NetworkImage(widget.userAvatar)
-              : null,
-          child: (user.id != widget.userId || widget.userAvatar.isEmpty)
-              ? Text(firstLetter, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18))
-              : null,
-        ),
+      return CircleAvatar(
+        radius: size.width / 2,
+        backgroundColor: const Color(0xFF1A1A2E),
+        backgroundImage: (user.id == safeUserId && widget.userAvatar.isNotEmpty)
+            ? NetworkImage(widget.userAvatar)
+            : null,
+        child: (user.id != safeUserId || widget.userAvatar.isEmpty)
+            ? Text(firstLetter, style: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 22))
+            : null,
       );
     };
 
@@ -155,8 +128,8 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
       child: ZegoUIKitPrebuiltLiveAudioRoom(
         appID: 358538422,
         appSign: '7e4ad77a5ad88a14bdbfbda739b67e9de336d5c91aa0b00672c22eecd96823fa',
-        userID: widget.userId,
-        userName: widget.userName,
+        userID: safeUserId,
+        userName: widget.userName.isEmpty ? "Nova User" : widget.userName,
         roomID: widget.roomId,
         config: config,
       ),

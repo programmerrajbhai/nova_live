@@ -1,44 +1,41 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import '../controller/audio_room_controller.dart';
+import '../model/audio_room_model.dart';
 
 class AudioRoomView extends StatelessWidget {
   final AudioRoomController controller = Get.put(AudioRoomController());
-  final TextEditingController roomNameController = TextEditingController(); // রুম নেম কন্ট্রোলার
+  final TextEditingController roomNameController = TextEditingController();
 
   AudioRoomView({super.key});
 
-  // 🔥 রুম খোলার পপ-আপ ডায়ালগ
   void _showCreateRoomDialog(BuildContext context) {
     roomNameController.clear();
     Get.dialog(
       AlertDialog(
-        backgroundColor: const Color(0xFF1E1E1E),
-        title: const Text('Create Audio Room', style: TextStyle(color: Colors.white)),
+        backgroundColor: const Color(0xFF1A1A2E),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: const Text('Start Live Audio Room', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
         content: TextField(
           controller: roomNameController,
           style: const TextStyle(color: Colors.white),
           decoration: InputDecoration(
-            hintText: "Enter Room Name (e.g. Chill Adda)",
-            hintStyle: const TextStyle(color: Colors.grey),
+            hintText: "E.g. Midnight Chill Adda 🎵",
+            hintStyle: const TextStyle(color: Colors.white38),
             filled: true,
-            fillColor: const Color(0xFF2A2A2A),
-            border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+            fillColor: const Color(0xFF16213E),
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(15), borderSide: BorderSide.none),
           ),
         ),
         actions: [
-          TextButton(
-            onPressed: () => Get.back(),
-            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
-          ),
+          TextButton(onPressed: () => Get.back(), child: const Text('Cancel', style: TextStyle(color: Colors.grey))),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.purpleAccent),
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFE94560), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
             onPressed: () {
               Get.back();
               controller.startMyRoom(roomNameController.text.trim());
             },
-            child: const Text('Start Live', style: TextStyle(color: Colors.white)),
+            child: const Text('Go Live', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
           )
         ],
       ),
@@ -48,85 +45,84 @@ class AudioRoomView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFF121212),
+      backgroundColor: const Color(0xFF0F3460),
       appBar: AppBar(
-        title: const Text('Live Adda', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 22)),
-        backgroundColor: Colors.transparent,
+        title: const Text('Nova Audio Rooms', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+        backgroundColor: const Color(0xFF1A1A2E),
         elevation: 0,
         centerTitle: true,
       ),
       body: Column(
         children: [
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-            child: Obx(() => ElevatedButton(
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(20),
+            decoration: const BoxDecoration(
+              color: Color(0xFF1A1A2E),
+              borderRadius: BorderRadius.only(bottomLeft: Radius.circular(30), bottomRight: Radius.circular(30)),
+            ),
+            child: Obx(() => ElevatedButton.icon(
               style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.purpleAccent,
+                backgroundColor: const Color(0xFFE94560),
                 minimumSize: const Size(double.infinity, 55),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+                elevation: 10,
+                shadowColor: const Color(0xFFE94560).withOpacity(0.5),
               ),
               onPressed: controller.isCreatingRoom.value ? null : () => _showCreateRoomDialog(context),
-              child: controller.isCreatingRoom.value
+              icon: controller.isCreatingRoom.value ? const SizedBox() : const Icon(Icons.mic, color: Colors.white, size: 28),
+              label: controller.isCreatingRoom.value
                   ? const CircularProgressIndicator(color: Colors.white)
-                  : const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.mic, color: Colors.white),
-                  SizedBox(width: 10),
-                  Text('Start My Audio Room', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-                ],
-              ),
+                  : const Text('Create My Room', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
             )),
           ),
 
-          const SizedBox(height: 10),
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 20),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Text('Active Rooms 🔴', style: TextStyle(color: Colors.white70, fontSize: 16, fontWeight: FontWeight.w600)),
-            ),
-          ),
-          const SizedBox(height: 10),
-
+          const SizedBox(height: 15),
           Expanded(
-            child: StreamBuilder<QuerySnapshot>(
+            child: StreamBuilder<List<AudioRoomModel>>(
               stream: controller.getLiveRoomsStream(),
               builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator(color: Colors.purpleAccent));
-                if (!snapshot.hasData || snapshot.data!.docs.isEmpty) return const Center(child: Text('No active rooms right now.', style: TextStyle(color: Colors.grey, fontSize: 16)));
+                if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator(color: Color(0xFFE94560)));
+                if (!snapshot.hasData || snapshot.data!.isEmpty) return const Center(child: Text('No active rooms right now.\nBe the first to create one!', textAlign: TextAlign.center, style: TextStyle(color: Colors.white54, fontSize: 16)));
 
-                var docs = snapshot.data!.docs;
+                var rooms = snapshot.data!;
 
-                return GridView.builder(
-                  padding: const EdgeInsets.all(15),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2, crossAxisSpacing: 15, mainAxisSpacing: 15, childAspectRatio: 0.85,
-                  ),
-                  itemCount: docs.length,
+                return ListView.builder(
+                  padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
+                  itemCount: rooms.length,
                   itemBuilder: (context, index) {
-                    var room = docs[index].data() as Map<String, dynamic>;
+                    AudioRoomModel room = rooms[index];
 
                     return GestureDetector(
-                      onTap: () => controller.joinRoom(room['roomId'], room['roomName'] ?? "${room['hostName']}'s Adda"),
+                      onTap: () => controller.joinRoom(room.roomId, room.roomName),
                       child: Container(
+                        margin: const EdgeInsets.only(bottom: 15),
+                        padding: const EdgeInsets.all(15),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF1E1E1E),
+                          color: const Color(0xFF1A1A2E),
                           borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: Colors.purpleAccent.withOpacity(0.3), width: 1),
+                          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 10, offset: const Offset(0, 5))],
                         ),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
+                        child: Row(
                           children: [
                             CircleAvatar(
                               radius: 35,
                               backgroundColor: Colors.white10,
-                              backgroundImage: room['hostAvatar'].isNotEmpty ? NetworkImage(room['hostAvatar']) : null,
-                              child: room['hostAvatar'].isEmpty ? const Icon(Icons.person, color: Colors.white, size: 35) : null,
+                              backgroundImage: room.hostAvatar.isNotEmpty ? NetworkImage(room.hostAvatar) : null,
+                              child: room.hostAvatar.isEmpty ? const Icon(Icons.person, color: Colors.white, size: 30) : null,
                             ),
-                            const SizedBox(height: 12),
-                            Text(room['roomName'] ?? 'Chill Adda', style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
-                            Text('Host: ${room['hostName']}', style: const TextStyle(color: Colors.grey, fontSize: 12), maxLines: 1, overflow: TextOverflow.ellipsis),
+                            const SizedBox(width: 15),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(room.roomName, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                  const SizedBox(height: 5),
+                                  Text('Host: ${room.hostName}', style: const TextStyle(color: Colors.white54, fontSize: 14), maxLines: 1, overflow: TextOverflow.ellipsis),
+                                ],
+                              ),
+                            ),
+                            const Icon(Icons.waves, color: Color(0xFFE94560), size: 30),
                           ],
                         ),
                       ),
