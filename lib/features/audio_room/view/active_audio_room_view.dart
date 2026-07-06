@@ -21,6 +21,7 @@ class ActiveAudioRoomView extends StatefulWidget {
     required this.userId,
     required this.userName,
     required this.userAvatar,
+
   });
 
   @override
