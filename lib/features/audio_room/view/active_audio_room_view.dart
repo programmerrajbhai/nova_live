@@ -49,7 +49,6 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
     super.dispose();
   }
 
-  // 💬 রিয়েল মেসেজ সেন্ড ফাংশন
   void _sendMessage() {
     if (chatController.text.trim().isNotEmpty) {
       ZegoUIKit().sendInRoomMessage(chatController.text.trim());
@@ -58,7 +57,6 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
     }
   }
 
-  // 🚪 লিভ কনফার্মেশন ডায়ালগ
   void _showLeaveDialog() {
     Get.defaultDialog(
       backgroundColor: const Color(0xFF1A1A2E),
@@ -103,7 +101,6 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
       ),
     );
 
-    // 🪑 সিট লেআউট: ৩ লাইন, প্রতি লাইনে ৪ জন = মোট ১২ সিট
     config.seat.layout = ZegoLiveAudioRoomLayoutConfig(
       rowConfigs: [
         ZegoLiveAudioRoomLayoutRowConfig(count: 4, alignment: ZegoLiveAudioRoomLayoutAlignment.spaceAround),
@@ -114,31 +111,73 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
 
     if (widget.isHost) config.seat.hostIndexes = [0];
 
-    // 🖼️ কাস্টম সিট বিল্ডার (লক এবং বসার সমস্যা ১০০% ফিক্সড)
-    config.seat.avatarBuilder = (BuildContext context, Size size, ZegoUIKitUser? user, Map<String, dynamic> extraInfo) {
+    // 🔥 নিখুঁত সমাধান: Foreground Builder ব্যবহার করে ডিফল্ট আইকন ঢেকে দেওয়া হয়েছে
+    config.seat.foregroundBuilder = (BuildContext context, Size size, ZegoUIKitUser? user, Map<String, dynamic> extraInfo) {
+      int seatIndex = extraInfo['seatIndex'] ?? extraInfo['seat_index'] ?? extraInfo['index'] ?? -1;
 
-      // 🔴 যদি সিট ফাঁকা থাকে
+      // সিট যদি খালি থাকে
       if (user == null || user.id.isEmpty) {
-        // 🔥 ম্যাজিক ফিক্স: এখানে কোনো GestureDetector দেওয়া হয়নি!
-        // এর ফলে Zego-র ডিফল্ট ক্লিক কাজ করবে। হোস্ট ক্লিক করলে লক মেনু আসবে, অডিয়েন্স ক্লিক করলে বসতে পারবে।
-        return Container(
-          decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: Colors.white.withOpacity(0.05),
-              border: Border.all(color: Colors.white12, width: 1.5)
-          ),
-          child: const Center(child: Icon(Icons.add, color: Colors.white38, size: 24)),
-        );
+        return Obx(() {
+          bool isLocked = roomController.lockedSeats.contains(seatIndex);
+
+          // Solid background color (Color(0xFF1A1A2E)) Zego-র ডিফল্ট আইকন পুরোপুরি ঢেকে দেবে
+          Widget customSeatUI = Container(
+            width: size.width,
+            height: size.height,
+            decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: const Color(0xFF1A1A2E), // সলিড কালার! ট্রান্সপারেন্ট নয়।
+                border: Border.all(color: isLocked ? Colors.redAccent.withOpacity(0.8) : Colors.cyanAccent.withOpacity(0.5), width: 2)
+            ),
+            child: Center(
+                child: Icon(isLocked ? Icons.lock : Icons.add, color: isLocked ? Colors.redAccent : Colors.cyanAccent, size: 24)
+            ),
+          );
+
+          // হোস্টের জন্য ক্লিক ইভেন্ট
+          if (widget.isHost) {
+            return GestureDetector(
+              onTap: () {
+                if (seatIndex != -1) {
+                  roomController.toggleSeatLock(seatIndex);
+                }
+              },
+              child: customSeatUI,
+            );
+          }
+          // অডিয়েন্সের জন্য ইভেন্ট
+          else {
+            if (isLocked) {
+              // লক থাকলে ক্লিক ব্লক করবে
+              return GestureDetector(
+                onTap: () {
+                  Get.snackbar('Locked 🔒', 'This seat is locked by the host.', backgroundColor: Colors.redAccent, colorText: Colors.white);
+                },
+                child: customSeatUI,
+              );
+            } else {
+              // আনলক থাকলে IgnorePointer, ফলে Zego-র বসার প্রম্পট কাজ করবে
+              return IgnorePointer(
+                child: customSeatUI,
+              );
+            }
+          }
+        });
       }
 
-      // 🟢 যদি সিটে ইউজার বসা থাকে
+      return const SizedBox.shrink();
+    };
+
+    // 🔥 Avatar Builder: বসা ইউজারদের প্রোফাইল ছবি
+    config.seat.avatarBuilder = (BuildContext context, Size size, ZegoUIKitUser? user, Map<String, dynamic> extraInfo) {
+      if (user == null || user.id.isEmpty) return const SizedBox.shrink();
+
       String firstLetter = user.name.trim().isNotEmpty ? user.name.trim().substring(0, 1).toUpperCase() : 'U';
       bool isHostUser = widget.isHost && user.id == safeUserId;
 
       return GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () {
-          // নিজের প্রোফাইল ছাড়া বাকি সবার প্রোফাইল মেনু ওপেন হবে
           if (user.id != safeUserId) {
             UserProfileSheet.show(context: context, clickedUser: user, isHost: widget.isHost, roomId: widget.roomId);
           }
@@ -180,7 +219,6 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
         backgroundColor: const Color(0xFF0D0B14),
         body: Stack(
           children: [
-            // ১. মূল অডিও রুম উইজেট
             ZegoUIKitPrebuiltLiveAudioRoom(
               appID: 358538422,
               appSign: '7e4ad77a5ad88a14bdbfbda739b67e9de336d5c91aa0b00672c22eecd96823fa',
@@ -190,7 +228,6 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
               config: config,
             ),
 
-            // ২. কাস্টম টপ বার
             Positioned(
               top: 15, left: 15, right: 15,
               child: Row(
@@ -224,7 +261,6 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
               ),
             ),
 
-            // ৩. কাস্টম বটম বার (রিয়েল চ্যাট ও অ্যাকশন বাটন)
             Positioned(
               bottom: 0, left: 0, right: 0,
               child: ClipRRect(
@@ -256,6 +292,7 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
                           ),
                         ),
                         const SizedBox(width: 10),
+
                         Obx(() => GestureDetector(
                           onTap: () {
                             roomController.toggleMute();
@@ -281,7 +318,6 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
               ),
             ),
 
-            // ৪. গিফট অ্যানিমেশন ওভারলে
             Obx(() {
               if (roomController.showGiftAnimation.value) {
                 return Center(
@@ -308,7 +344,7 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
 }
 
 // ==========================================
-// 🎁 গিফট বটম শিট ক্লাস (একই ফাইলে)
+// 🎁 গিফট বটম শিট
 // ==========================================
 class GiftBottomSheet {
   static void show(BuildContext context, ActiveRoomController roomController) {
@@ -374,7 +410,7 @@ class GiftBottomSheet {
 }
 
 // ==========================================
-// 👤 ইউজার প্রোফাইল শিট ক্লাস (একই ফাইলে)
+// 👤 ইউজার প্রোফাইল শিট
 // ==========================================
 class UserProfileSheet {
   static void show({
@@ -425,6 +461,7 @@ class UserProfileSheet {
                 child: const Text('View Full Profile', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
               ),
               const SizedBox(height: 20),
+
               if (isHost) ...[
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -443,7 +480,7 @@ class UserProfileSheet {
               ] else ...[
                 _buildActionButton('Report User', Icons.report_problem, Colors.orangeAccent, () {
                   Get.back();
-                  Get.snackbar('Reported', 'User reported successfully.', backgroundColor: Colors.orangeAccent, colorText: Colors.white);
+                  Get.snackbar('Reported', 'User reported successfully to moderation team.', backgroundColor: Colors.orangeAccent, colorText: Colors.white);
                 }),
               ]
             ],
