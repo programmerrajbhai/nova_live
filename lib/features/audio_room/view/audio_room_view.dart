@@ -94,7 +94,8 @@ class AudioRoomView extends StatelessWidget {
                     AudioRoomModel room = rooms[index];
 
                     return GestureDetector(
-                      onTap: () => controller.joinRoom(room.roomId, room.roomName),
+                      // 🔥 FIX: জয়েন করার সময় হোস্টের ছবি (hostAvatar) লোগো হিসেবে পাঠিয়ে দেওয়া হলো
+                      onTap: () => controller.joinRoom(room.roomId, room.roomName, room.hostAvatar),
                       child: Container(
                         margin: const EdgeInsets.only(bottom: 15),
                         padding: const EdgeInsets.all(15),

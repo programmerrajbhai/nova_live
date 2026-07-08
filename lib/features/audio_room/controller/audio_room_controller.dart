@@ -67,7 +67,8 @@ class AudioRoomController extends GetxController {
       Get.to(() => ActiveAudioRoomView(
         roomId: roomId,
         roomName: finalRoomName,
-        isHost: true, // সে হোস্ট
+        roomLogo: myAvatar.value, // 🔥 FIX: হোস্টের নিজের ছবি রুম লোগো হিসেবে দেওয়া হলো
+        isHost: true,
         userId: safeUserId,
         userName: myName.value.isEmpty ? "Nova Host" : myName.value,
         userAvatar: myAvatar.value,
@@ -79,13 +80,15 @@ class AudioRoomController extends GetxController {
     }
   }
 
-  void joinRoom(String roomId, String roomName) {
+  // 🔥 FIX: roomLogo প্যারামিটারটি রিসিভ করার জন্য এড করা হলো
+  void joinRoom(String roomId, String roomName, String roomLogo) {
     if (safeUserId.isEmpty) return;
 
     Get.to(() => ActiveAudioRoomView(
       roomId: roomId,
       roomName: roomName,
-      isHost: false, // সে স্পিকার হিসেবে জয়েন করবে
+      roomLogo: roomLogo, // 🔥 FIX: জয়েন করার সময় হোস্টের ছবি লোগো হিসেবে দেওয়া হলো
+      isHost: false,
       userId: safeUserId,
       userName: myName.value.isEmpty ? "Nova Speaker" : myName.value,
       userAvatar: myAvatar.value,
