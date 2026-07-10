@@ -3,6 +3,9 @@ import 'package:get/get.dart';
 import 'package:zego_uikit/zego_uikit.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+// 🔥 UserProfileView ইমপোর্ট করা হলো
+import '../../profile/view/user_profile_view.dart';
+
 class UserProfileSheet {
   static void show({
     required BuildContext context,
@@ -22,16 +25,22 @@ class UserProfileSheet {
               colors: [Color(0xFF141E30), Color(0xFF243B55)],
             ),
             borderRadius: const BorderRadius.vertical(top: Radius.circular(35)),
-            border: Border.all(color: Colors.purpleAccent.withOpacity(0.3), width: 1.5),
+            border: Border.all(
+              color: Colors.purpleAccent.withOpacity(0.3),
+              width: 1.5,
+            ),
           ),
           padding: const EdgeInsets.fromLTRB(20, 10, 20, 30),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                  width: 50,
-                  height: 5,
-                  decoration: BoxDecoration(color: Colors.white38, borderRadius: BorderRadius.circular(10))
+                width: 50,
+                height: 5,
+                decoration: BoxDecoration(
+                  color: Colors.white38,
+                  borderRadius: BorderRadius.circular(10),
+                ),
               ),
               const SizedBox(height: 25),
 
@@ -39,82 +48,157 @@ class UserProfileSheet {
                 radius: 50,
                 backgroundColor: const Color(0xFF1A1A2E),
                 child: Text(
-                  clickedUser.name.isNotEmpty ? clickedUser.name.substring(0, 1).toUpperCase() : 'U',
-                  style: const TextStyle(fontSize: 40, color: Colors.cyanAccent, fontWeight: FontWeight.bold),
+                  clickedUser.name.isNotEmpty
+                      ? clickedUser.name.substring(0, 1).toUpperCase()
+                      : 'U',
+                  style: const TextStyle(
+                    fontSize: 40,
+                    color: Colors.cyanAccent,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
               const SizedBox(height: 15),
               Text(
-                  clickedUser.name,
-                  style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)
+                clickedUser.name,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               Text(
-                  'ID: ${clickedUser.id}',
-                  style: const TextStyle(color: Colors.white54, fontSize: 12)
+                'ID: ${clickedUser.id}',
+                style: const TextStyle(color: Colors.white54, fontSize: 12),
+              ),
+              const SizedBox(height: 20),
+
+              // 🔥 View Full Profile Button যুক্ত করা হলো
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.purpleAccent,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  minimumSize: const Size(double.infinity, 50),
+                ),
+                onPressed: () {
+                  Get.back(); // বটম শিট ক্লোজ করবে
+                  // সরাসরি ইউজারের ফুল প্রোফাইল ভিউতে নিয়ে যাবে
+                  Get.to(() => UserProfileView(
+                    userId: clickedUser.id,
+                    userName: clickedUser.name,
+                  ));
+                },
+                child: const Text(
+                  'View Full Profile',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
               const SizedBox(height: 25),
 
-              // 🔥 রিয়েল এডমিন অ্যাকশন
+              // 🔥 রিয়েল এডমিন অ্যাকশন (Host এর জন্য)
               if (isHost) ...[
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    _buildActionButton('Kick', Icons.output, Colors.orangeAccent, () {
-                      ZegoUIKit().removeUserFromRoom([clickedUser.id]);
-                      Get.back();
-                      Get.snackbar('Kicked', '${clickedUser.name} has been kicked.', backgroundColor: Colors.orangeAccent, colorText: Colors.white);
-                    }),
-                    _buildActionButton('Ban', Icons.block, Colors.redAccent, () async {
-                      // ১. ডেটাবেসে ব্যান লিস্টে এড করা
-                      await FirebaseFirestore.instance
-                          .collection('banned_users')
-                          .doc(roomId)
-                          .collection('users')
-                          .doc(clickedUser.id)
-                          .set({
-                        'banned_at': FieldValue.serverTimestamp(),
-                        'banned_by': currentUserId,
-                      });
-                      // ২. রুম থেকে রিয়েল টাইমে বের করে দেওয়া
-                      ZegoUIKit().removeUserFromRoom([clickedUser.id]);
-                      Get.back();
-                      Get.snackbar(
+                    _buildActionButton(
+                      'Kick',
+                      Icons.output,
+                      Colors.orangeAccent,
+                          () {
+                        ZegoUIKit().removeUserFromRoom([clickedUser.id]);
+                        Get.back();
+                        Get.snackbar(
+                          'Kicked',
+                          '${clickedUser.name} has been kicked.',
+                          backgroundColor: Colors.orangeAccent,
+                          colorText: Colors.white,
+                        );
+                      },
+                    ),
+                    _buildActionButton(
+                      'Ban',
+                      Icons.block,
+                      Colors.redAccent,
+                          () async {
+                        // ১. ডেটাবেসে ব্যান লিস্টে এড করা
+                        await FirebaseFirestore.instance
+                            .collection('banned_users')
+                            .doc(roomId)
+                            .collection('users')
+                            .doc(clickedUser.id)
+                            .set({
+                          'banned_at': FieldValue.serverTimestamp(),
+                          'banned_by': currentUserId,
+                        });
+                        // ২. রুম থেকে রিয়েল টাইমে বের করে দেওয়া
+                        ZegoUIKit().removeUserFromRoom([clickedUser.id]);
+                        Get.back();
+                        Get.snackbar(
                           'Banned 🚫',
                           '${clickedUser.name} is permanently banned.',
                           backgroundColor: Colors.redAccent,
-                          colorText: Colors.white
-                      );
-                    }),
+                          colorText: Colors.white,
+                        );
+                      },
+                    ),
                   ],
-                )
+                ),
               ] else ...[
                 // সাধারণ ইউজারদের জন্য Block এবং Report
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
-                    _buildActionButton('Block User', Icons.person_off, Colors.grey, () async {
-                      await FirebaseFirestore.instance
-                          .collection('blocked_users')
-                          .doc(currentUserId)
-                          .collection('blocked')
-                          .doc(clickedUser.id)
-                          .set({'blocked_at': FieldValue.serverTimestamp()});
-                      Get.back();
-                      Get.snackbar('Blocked', 'You will no longer see interactions from this user.', backgroundColor: Colors.grey[800], colorText: Colors.white);
-                    }),
-                    _buildActionButton('Report User', Icons.report_problem, Colors.orangeAccent, () async {
-                      await FirebaseFirestore.instance.collection('reports_users').add({
-                        'reported_user_id': clickedUser.id,
-                        'reported_by': currentUserId,
-                        'room_id': roomId,
-                        'timestamp': FieldValue.serverTimestamp(),
-                      });
-                      Get.back();
-                      Get.snackbar('Reported', 'User reported successfully.', backgroundColor: Colors.orangeAccent, colorText: Colors.white);
-                    }),
+                    _buildActionButton(
+                      'Block User',
+                      Icons.person_off,
+                      Colors.grey,
+                          () async {
+                        await FirebaseFirestore.instance
+                            .collection('blocked_users')
+                            .doc(currentUserId)
+                            .collection('blocked')
+                            .doc(clickedUser.id)
+                            .set({'blocked_at': FieldValue.serverTimestamp()});
+                        Get.back();
+                        Get.snackbar(
+                          'Blocked',
+                          'You will no longer see interactions from this user.',
+                          backgroundColor: Colors.grey[800],
+                          colorText: Colors.white,
+                        );
+                      },
+                    ),
+                    _buildActionButton(
+                      'Report User',
+                      Icons.report_problem,
+                      Colors.orangeAccent,
+                          () async {
+                        await FirebaseFirestore.instance
+                            .collection('reports_users')
+                            .add({
+                          'reported_user_id': clickedUser.id,
+                          'reported_by': currentUserId,
+                          'room_id': roomId,
+                          'timestamp': FieldValue.serverTimestamp(),
+                        });
+                        Get.back();
+                        Get.snackbar(
+                          'Reported',
+                          'User reported successfully.',
+                          backgroundColor: Colors.orangeAccent,
+                          colorText: Colors.white,
+                        );
+                      },
+                    ),
                   ],
-                )
-              ]
+                ),
+              ],
             ],
           ),
         );
@@ -122,22 +206,30 @@ class UserProfileSheet {
     );
   }
 
-  static Widget _buildActionButton(String title, IconData icon, Color color, VoidCallback onTap) {
+  static Widget _buildActionButton(
+      String title,
+      IconData icon,
+      Color color,
+      VoidCallback onTap,
+      ) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(15),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
         decoration: BoxDecoration(
-            color: color.withOpacity(0.1),
-            borderRadius: BorderRadius.circular(15),
-            border: Border.all(color: color.withOpacity(0.5))
+          color: color.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(15),
+          border: Border.all(color: color.withOpacity(0.5)),
         ),
         child: Row(
           children: [
             Icon(icon, color: color, size: 20),
             const SizedBox(width: 8),
-            Text(title, style: TextStyle(color: color, fontWeight: FontWeight.bold)),
+            Text(
+              title,
+              style: TextStyle(color: color, fontWeight: FontWeight.bold),
+            ),
           ],
         ),
       ),

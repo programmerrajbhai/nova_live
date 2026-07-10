@@ -6,7 +6,7 @@ class AudioRoomModel {
   final String hostName;
   final String hostAvatar;
   final String roomName;
-  final Timestamp? createdAt;
+  final String roomLogo;
 
   AudioRoomModel({
     required this.roomId,
@@ -14,8 +14,21 @@ class AudioRoomModel {
     required this.hostName,
     required this.hostAvatar,
     required this.roomName,
-    this.createdAt,
+    required this.roomLogo,
   });
+
+  factory AudioRoomModel.fromDocument(DocumentSnapshot doc) {
+    final data = doc.data() as Map<String, dynamic>;
+
+    return AudioRoomModel(
+      roomId: data['roomId'] ?? '',
+      hostId: data['hostId'] ?? '',
+      hostName: data['hostName'] ?? 'Nova User',
+      hostAvatar: data['hostAvatar'] ?? '',
+      roomName: data['roomName'] ?? 'Nova Live Room',
+      roomLogo: data['roomLogo'] ?? data['hostAvatar'] ?? '',
+    );
+  }
 
   Map<String, dynamic> toMap() {
     return {
@@ -24,19 +37,8 @@ class AudioRoomModel {
       'hostName': hostName,
       'hostAvatar': hostAvatar,
       'roomName': roomName,
+      'roomLogo': roomLogo,
       'createdAt': FieldValue.serverTimestamp(),
     };
-  }
-
-  factory AudioRoomModel.fromDocument(DocumentSnapshot doc) {
-    Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-    return AudioRoomModel(
-      roomId: data['roomId'] ?? '',
-      hostId: data['hostId'] ?? '',
-      hostName: data['hostName'] ?? 'User',
-      hostAvatar: data['hostAvatar'] ?? '',
-      roomName: data['roomName'] ?? 'Nova Live Room',
-      createdAt: data['createdAt'],
-    );
   }
 }
