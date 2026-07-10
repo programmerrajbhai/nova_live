@@ -67,11 +67,7 @@ class MessagesView extends StatelessWidget {
         ),
         body: Obx(() {
           if (controller.myUid.value.isEmpty) {
-            return const Center(
-              child: CircularProgressIndicator(
-                color: Color(0xFFA855F7),
-              ),
-            );
+            return const Center(child: CircularProgressIndicator(color: Color(0xFFA855F7)));
           }
 
           return StreamBuilder<QuerySnapshot>(
@@ -87,11 +83,7 @@ class MessagesView extends StatelessWidget {
               }
 
               if (snapshot.connectionState == ConnectionState.waiting) {
-                return const Center(
-                  child: CircularProgressIndicator(
-                    color: Color(0xFFA855F7),
-                  ),
-                );
+                return const Center(child: CircularProgressIndicator(color: Color(0xFFA855F7)));
               }
 
               if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
@@ -105,19 +97,28 @@ class MessagesView extends StatelessWidget {
 
               final docs = snapshot.data!.docs.toList();
 
-              // 🔥 লেটেস্ট মেসেজ সবার উপরে রাখার লজিক
+              // 🔥 Hybrid Sorting Logic
               docs.sort((a, b) {
                 final aData = a.data() as Map<String, dynamic>;
                 final bData = b.data() as Map<String, dynamic>;
 
-                final Timestamp? timeA = aData['lastUpdated'];
-                final Timestamp? timeB = bData['lastUpdated'];
+                // Time A
+                int timeA = 0;
+                if (aData['lastUpdated'] is int) {
+                  timeA = aData['lastUpdated'];
+                } else if (aData['lastUpdated'] is Timestamp) {
+                  timeA = (aData['lastUpdated'] as Timestamp).millisecondsSinceEpoch;
+                }
 
-                if (timeA == null && timeB == null) return 0;
-                if (timeA == null) return -1; // ফায়ারবেস আপডেট হওয়ার সময়টুকুতে মেসেজ উপরে থাকবে
-                if (timeB == null) return 1;
+                // Time B
+                int timeB = 0;
+                if (bData['lastUpdated'] is int) {
+                  timeB = bData['lastUpdated'];
+                } else if (bData['lastUpdated'] is Timestamp) {
+                  timeB = (bData['lastUpdated'] as Timestamp).millisecondsSinceEpoch;
+                }
 
-                return timeB.compareTo(timeA);
+                return timeB.compareTo(timeA); // নতুন মেসেজ ১০০% উপরে থাকবে
               });
 
               return ListView.builder(
@@ -145,12 +146,12 @@ class MessagesView extends StatelessWidget {
                   final String targetName = targetData['name'] ?? 'User';
                   final String targetAvatar = targetData['avatar'] ?? '';
 
-                  // 🔥 এখানেই লেটেস্ট মেসেজটা ধরবে
+                  // 🔥 লেটেস্ট মেসেজ ধরবে
                   final String lastMessage = roomData['lastMessage'] ?? 'Started a chat';
 
-                  // 🔥 এবং রিয়েল টাইম শো করবে
-                  final Timestamp? time = roomData['lastUpdated'] as Timestamp?;
-                  final String timeAgo = controller.getTimeAgo(time);
+                  // 🔥 ডাইনামিক টাইম পাস করা হচ্ছে
+                  final dynamic timeData = roomData['lastUpdated'];
+                  final String timeAgo = controller.getTimeAgo(timeData);
 
                   return _buildChatCard(
                     targetName: targetName,
@@ -197,10 +198,7 @@ class MessagesView extends StatelessWidget {
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        border: Border.all(
-          color: Colors.white.withOpacity(0.10),
-          width: 1,
-        ),
+        border: Border.all(color: Colors.white.withOpacity(0.10), width: 1),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.22),
@@ -226,10 +224,7 @@ class MessagesView extends StatelessWidget {
                       decoration: const BoxDecoration(
                         shape: BoxShape.circle,
                         gradient: LinearGradient(
-                          colors: [
-                            Color(0xFFA855F7),
-                            Color(0xFF22D3EE),
-                          ],
+                          colors: [Color(0xFFA855F7), Color(0xFF22D3EE)],
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
                         ),
@@ -247,8 +242,7 @@ class MessagesView extends StatelessWidget {
                       right: 2,
                       bottom: 2,
                       child: Container(
-                        width: 13,
-                        height: 13,
+                        width: 13, height: 13,
                         decoration: BoxDecoration(
                           color: const Color(0xFF22C55E),
                           shape: BoxShape.circle,
@@ -265,25 +259,14 @@ class MessagesView extends StatelessWidget {
                     children: [
                       Text(
                         targetName,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 17,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.1,
-                        ),
+                        maxLines: 1, overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w800, letterSpacing: 0.1),
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        lastMessage, // 🔥 এখানে লেটেস্ট মেসেজটা শো করবে
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.85),
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                        ),
+                        lastMessage, // 🔥 লেটেস্ট মেসেজটা শো করবে
+                        maxLines: 1, overflow: TextOverflow.ellipsis,
+                        style: TextStyle(color: Colors.white.withOpacity(0.85), fontSize: 14, fontWeight: FontWeight.w500),
                       ),
                     ],
                   ),
@@ -294,29 +277,18 @@ class MessagesView extends StatelessWidget {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Text(
-                      timeAgo, // 🔥 এখানে টাইম শো করবে
-                      style: TextStyle(
-                        color: Colors.cyanAccent.withOpacity(0.8),
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                      ),
+                      timeAgo, // 🔥 রিয়েল টাইম শো করবে
+                      style: TextStyle(color: Colors.cyanAccent.withOpacity(0.8), fontSize: 11, fontWeight: FontWeight.bold),
                     ),
                     const SizedBox(height: 8),
                     Container(
-                      width: 38,
-                      height: 38,
+                      width: 38, height: 38,
                       decoration: BoxDecoration(
                         color: const Color(0xFFA855F7).withOpacity(0.14),
                         shape: BoxShape.circle,
-                        border: Border.all(
-                          color: const Color(0xFFA855F7).withOpacity(0.25),
-                        ),
+                        border: Border.all(color: const Color(0xFFA855F7).withOpacity(0.25)),
                       ),
-                      child: const Icon(
-                        Icons.arrow_forward_ios_rounded,
-                        color: Color(0xFFA855F7),
-                        size: 15,
-                      ),
+                      child: const Icon(Icons.arrow_forward_ios_rounded, color: Color(0xFFA855F7), size: 15),
                     ),
                   ],
                 ),
