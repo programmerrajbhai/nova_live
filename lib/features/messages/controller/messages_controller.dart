@@ -30,7 +30,6 @@ class MessagesController extends GetxController {
     }
   }
 
-  // 🔥 মাস্টার ফিক্স: Index Error এড়ানোর জন্য orderBy সরিয়ে ক্লায়েন্ট সাইডে সর্ট করব ভিউ-তে
   Stream<QuerySnapshot> getInboxStream() {
     return _db
         .collection('chat_rooms')
@@ -47,29 +46,58 @@ class MessagesController extends GetxController {
         .snapshots();
   }
 
+  // ⏰ ১০০% পারফেক্ট টাইম কনভার্টার
+  String getTimeAgo(Timestamp? timestamp) {
+    if (timestamp == null) return 'Just now';
+
+    DateTime date = timestamp.toDate();
+    Duration diff = DateTime.now().difference(date);
+
+    if (diff.inDays > 365) return '${(diff.inDays / 365).floor()}y ago';
+    if (diff.inDays >= 30) return '${(diff.inDays / 30).floor()}mo ago';
+    if (diff.inDays > 0) return '${diff.inDays}d ago';
+    if (diff.inHours > 0) return '${diff.inHours}h ago';
+    if (diff.inMinutes > 0) return '${diff.inMinutes}m ago';
+
+    return 'Just now';
+  }
+
+  // 🔥 মাস্টার ফিক্স: Bulletproof Firebase Update Logic
   Future<void> sendMessage(String roomId, String targetUid, String targetName, String targetAvatar) async {
     String text = messageController.text.trim();
     if (text.isEmpty || myUid.value.isEmpty) return;
 
-    messageController.clear();
+    messageController.clear(); // UI সাথে সাথে ক্লিয়ার হবে
 
     try {
+      // ১. সাব-কালেকশনে মেসেজ সেভ করা (এটা আপনার আগে থেকেই ঠিক ছিল)
       await _db.collection('chat_rooms').doc(roomId).collection('messages').add({
         'senderId': myUid.value,
         'text': text,
         'timestamp': FieldValue.serverTimestamp(),
       });
 
-      await _db.collection('chat_rooms').doc(roomId).set({
-        'participants': [myUid.value, targetUid],
-        'lastMessage': text,
-        'lastUpdated': FieldValue.serverTimestamp(),
-        'usersData': {
-          myUid.value: {'name': myName.value, 'avatar': myAvatar.value},
-          targetUid: {'name': targetName, 'avatar': targetAvatar},
-        }
-      }, SetOptions(merge: true));
+      // ২. মেইন ইনবক্স ডকুমেন্টে শুধু লাস্ট মেসেজ এবং টাইম ফোর্স আপডেট করা
+      final roomRef = _db.collection('chat_rooms').doc(roomId);
 
+      try {
+        // চেষ্টা করবে সরাসরি আপডেট করার (সবচেয়ে ফাস্ট এবং সিকিউরড)
+        await roomRef.update({
+          'lastMessage': text,
+          'lastUpdated': FieldValue.serverTimestamp(),
+        });
+      } catch (e) {
+        // যদি চ্যাট রুম না থাকে (প্রথম মেসেজ), তাহলে নতুন করে Set করবে
+        await roomRef.set({
+          'participants': [myUid.value, targetUid],
+          'lastMessage': text,
+          'lastUpdated': FieldValue.serverTimestamp(),
+          'usersData': {
+            myUid.value: {'name': myName.value.isNotEmpty ? myName.value : 'User', 'avatar': myAvatar.value},
+            targetUid: {'name': targetName.isNotEmpty ? targetName : 'User', 'avatar': targetAvatar},
+          }
+        });
+      }
     } catch (e) {
       Get.snackbar('Error', 'Failed to send message: $e');
     }

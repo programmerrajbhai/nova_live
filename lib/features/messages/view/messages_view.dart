@@ -97,7 +97,7 @@ class MessagesView extends StatelessWidget {
               if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
                 return _buildStateView(
                   icon: Icons.chat_bubble_outline_rounded,
-                  iconColor: Color(0xFF22D3EE),
+                  iconColor: const Color(0xFF22D3EE),
                   title: 'No messages yet',
                   subtitle: 'Match with someone to start chatting!',
                 );
@@ -105,6 +105,7 @@ class MessagesView extends StatelessWidget {
 
               final docs = snapshot.data!.docs.toList();
 
+              // 🔥 লেটেস্ট মেসেজ সবার উপরে রাখার লজিক
               docs.sort((a, b) {
                 final aData = a.data() as Map<String, dynamic>;
                 final bData = b.data() as Map<String, dynamic>;
@@ -112,8 +113,9 @@ class MessagesView extends StatelessWidget {
                 final Timestamp? timeA = aData['lastUpdated'];
                 final Timestamp? timeB = bData['lastUpdated'];
 
-                if (timeA == null) return 1;
-                if (timeB == null) return -1;
+                if (timeA == null && timeB == null) return 0;
+                if (timeA == null) return -1; // ফায়ারবেস আপডেট হওয়ার সময়টুকুতে মেসেজ উপরে থাকবে
+                if (timeB == null) return 1;
 
                 return timeB.compareTo(timeA);
               });
@@ -126,39 +128,35 @@ class MessagesView extends StatelessWidget {
                   final roomData = docs[index].data() as Map<String, dynamic>;
                   final String roomId = docs[index].id;
 
-                  final List<dynamic> participants =
-                      roomData['participants'] ?? [];
+                  final List<dynamic> participants = roomData['participants'] ?? [];
 
-                  final String targetUid = participants
-                      .firstWhere(
+                  final String targetUid = participants.firstWhere(
                         (id) => id.toString() != controller.myUid.value,
                     orElse: () => '',
-                  )
-                      .toString();
+                  ).toString();
 
                   if (targetUid.isEmpty) return const SizedBox.shrink();
 
-                  final Map<String, dynamic> usersData =
-                  Map<String, dynamic>.from(roomData['usersData'] ?? {});
-
-                  final Map<String, dynamic> targetData =
-                  Map<String, dynamic>.from(
-                    usersData[targetUid] ??
-                        {
-                          'name': 'Unknown',
-                          'avatar': '',
-                        },
+                  final Map<String, dynamic> usersData = Map<String, dynamic>.from(roomData['usersData'] ?? {});
+                  final Map<String, dynamic> targetData = Map<String, dynamic>.from(
+                    usersData[targetUid] ?? {'name': 'Unknown', 'avatar': ''},
                   );
 
                   final String targetName = targetData['name'] ?? 'User';
                   final String targetAvatar = targetData['avatar'] ?? '';
-                  final String lastMessage =
-                      roomData['lastMessage'] ?? 'Started a chat';
+
+                  // 🔥 এখানেই লেটেস্ট মেসেজটা ধরবে
+                  final String lastMessage = roomData['lastMessage'] ?? 'Started a chat';
+
+                  // 🔥 এবং রিয়েল টাইম শো করবে
+                  final Timestamp? time = roomData['lastUpdated'] as Timestamp?;
+                  final String timeAgo = controller.getTimeAgo(time);
 
                   return _buildChatCard(
                     targetName: targetName,
                     targetAvatar: targetAvatar,
                     lastMessage: lastMessage,
+                    timeAgo: timeAgo,
                     onTap: () {
                       Get.to(
                             () => ChatDetailsView(
@@ -184,6 +182,7 @@ class MessagesView extends StatelessWidget {
     required String targetName,
     required String targetAvatar,
     required String lastMessage,
+    required String timeAgo,
     required VoidCallback onTap,
   }) {
     return Container(
@@ -238,19 +237,12 @@ class MessagesView extends StatelessWidget {
                       child: CircleAvatar(
                         radius: 30,
                         backgroundColor: const Color(0xFF111827),
-                        backgroundImage: targetAvatar.isNotEmpty
-                            ? NetworkImage(targetAvatar)
-                            : null,
+                        backgroundImage: targetAvatar.isNotEmpty ? NetworkImage(targetAvatar) : null,
                         child: targetAvatar.isEmpty
-                            ? const Icon(
-                          Icons.person_rounded,
-                          color: Colors.white,
-                          size: 30,
-                        )
+                            ? const Icon(Icons.person_rounded, color: Colors.white, size: 30)
                             : null,
                       ),
                     ),
-
                     Positioned(
                       right: 2,
                       bottom: 2,
@@ -260,18 +252,13 @@ class MessagesView extends StatelessWidget {
                         decoration: BoxDecoration(
                           color: const Color(0xFF22C55E),
                           shape: BoxShape.circle,
-                          border: Border.all(
-                            color: const Color(0xFF070A12),
-                            width: 2,
-                          ),
+                          border: Border.all(color: const Color(0xFF070A12), width: 2),
                         ),
                       ),
                     ),
                   ],
                 ),
-
                 const SizedBox(width: 14),
-
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -289,36 +276,49 @@ class MessagesView extends StatelessWidget {
                       ),
                       const SizedBox(height: 6),
                       Text(
-                        lastMessage,
+                        lastMessage, // 🔥 এখানে লেটেস্ট মেসেজটা শো করবে
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
-                          color: Colors.white.withOpacity(0.55),
+                          color: Colors.white.withOpacity(0.85),
                           fontSize: 14,
-                          fontWeight: FontWeight.w400,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ],
                   ),
                 ),
-
                 const SizedBox(width: 10),
-
-                Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFA855F7).withOpacity(0.14),
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: const Color(0xFFA855F7).withOpacity(0.25),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      timeAgo, // 🔥 এখানে টাইম শো করবে
+                      style: TextStyle(
+                        color: Colors.cyanAccent.withOpacity(0.8),
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                  ),
-                  child: const Icon(
-                    Icons.arrow_forward_ios_rounded,
-                    color: Color(0xFFA855F7),
-                    size: 15,
-                  ),
+                    const SizedBox(height: 8),
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFA855F7).withOpacity(0.14),
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: const Color(0xFFA855F7).withOpacity(0.25),
+                        ),
+                      ),
+                      child: const Icon(
+                        Icons.arrow_forward_ios_rounded,
+                        color: Color(0xFFA855F7),
+                        size: 15,
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -328,12 +328,7 @@ class MessagesView extends StatelessWidget {
     );
   }
 
-  Widget _buildStateView({
-    required IconData icon,
-    required Color iconColor,
-    required String title,
-    required String subtitle,
-  }) {
+  Widget _buildStateView({required IconData icon, required Color iconColor, required String title, required String subtitle}) {
     return Center(
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 28),
@@ -342,57 +337,21 @@ class MessagesView extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 34),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(28),
-            gradient: LinearGradient(
-              colors: [
-                Colors.white.withOpacity(0.10),
-                Colors.white.withOpacity(0.045),
-              ],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
-            border: Border.all(
-              color: Colors.white.withOpacity(0.10),
-            ),
+            gradient: LinearGradient(colors: [Colors.white.withOpacity(0.105), Colors.white.withOpacity(0.045)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+            border: Border.all(color: Colors.white.withOpacity(0.10)),
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Container(
-                width: 76,
-                height: 76,
-                decoration: BoxDecoration(
-                  color: iconColor.withOpacity(0.12),
-                  shape: BoxShape.circle,
-                  border: Border.all(
-                    color: iconColor.withOpacity(0.28),
-                  ),
-                ),
-                child: Icon(
-                  icon,
-                  color: iconColor,
-                  size: 34,
-                ),
+                width: 76, height: 76,
+                decoration: BoxDecoration(color: iconColor.withOpacity(0.13), shape: BoxShape.circle, border: Border.all(color: iconColor.withOpacity(0.28))),
+                child: Icon(icon, color: iconColor, size: 34),
               ),
               const SizedBox(height: 18),
-              Text(
-                title,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 19,
-                  fontWeight: FontWeight.w800,
-                ),
-              ),
+              Text(title, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white, fontSize: 19, fontWeight: FontWeight.w800)),
               const SizedBox(height: 8),
-              Text(
-                subtitle,
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.55),
-                  fontSize: 14,
-                  height: 1.5,
-                ),
-              ),
+              Text(subtitle, textAlign: TextAlign.center, style: TextStyle(color: Colors.white.withOpacity(0.55), fontSize: 14, height: 1.5)),
             ],
           ),
         ),
