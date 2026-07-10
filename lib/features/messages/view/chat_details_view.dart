@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../core/widgets/premium_background.dart';
+import '../../profile/view/user_profile_view.dart';
 import '../controller/messages_controller.dart';
 
 class ChatDetailsView extends StatelessWidget {
@@ -35,71 +36,44 @@ class ChatDetailsView extends StatelessWidget {
             padding: const EdgeInsets.only(left: 10),
             child: Container(
               margin: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.08),
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: Colors.white.withOpacity(0.10),
-                ),
-              ),
-              child: IconButton(
-                icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 18),
-                onPressed: () => Get.back(),
-              ),
+              decoration: BoxDecoration(color: Colors.white.withOpacity(0.08), shape: BoxShape.circle, border: Border.all(color: Colors.white.withOpacity(0.10))),
+              child: IconButton(icon: const Icon(Icons.arrow_back_ios_new_rounded, color: Colors.white, size: 18), onPressed: () => Get.back()),
             ),
           ),
           title: Row(
             children: [
-              Stack(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(2),
-                    decoration: const BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: LinearGradient(
-                        colors: [Color(0xFFA855F7), Color(0xFF22D3EE)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
+              GestureDetector(
+                onTap: () {
+                  // 🚫 Policy: ব্লক করা থাকলে প্রোফাইল ভিজিট করতে দিবে না
+                  if (controller.blockedUsers.contains(targetUid)) {
+                    Get.snackbar('Blocked', 'Unblock this user from Safety Settings to view their profile.', backgroundColor: Colors.redAccent, colorText: Colors.white);
+                    return;
+                  }
+                  Get.to(() => UserProfileView(userId: targetUid, userName: targetName));
+                },
+                child: Stack(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(2),
+                      decoration: const BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: [Color(0xFFA855F7), Color(0xFF22D3EE)], begin: Alignment.topLeft, end: Alignment.bottomRight)),
+                      child: CircleAvatar(
+                        radius: 22, backgroundColor: const Color(0xFF111827),
+                        backgroundImage: targetAvatar.isNotEmpty ? NetworkImage(targetAvatar) : null,
+                        child: targetAvatar.isEmpty ? const Icon(Icons.person_rounded, color: Colors.white, size: 24) : null,
                       ),
                     ),
-                    child: CircleAvatar(
-                      radius: 22,
-                      backgroundColor: const Color(0xFF111827),
-                      backgroundImage: targetAvatar.isNotEmpty ? NetworkImage(targetAvatar) : null,
-                      child: targetAvatar.isEmpty ? const Icon(Icons.person_rounded, color: Colors.white, size: 24) : null,
-                    ),
-                  ),
-                  Positioned(
-                    right: 1,
-                    bottom: 1,
-                    child: Container(
-                      width: 11,
-                      height: 11,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF22C55E),
-                        shape: BoxShape.circle,
-                        border: Border.all(color: const Color(0xFF070A12), width: 2),
-                      ),
-                    ),
-                  ),
-                ],
+                    Positioned(right: 1, bottom: 1, child: Container(width: 11, height: 11, decoration: BoxDecoration(color: const Color(0xFF22C55E), shape: BoxShape.circle, border: Border.all(color: const Color(0xFF070A12), width: 2)))),
+                  ],
+                ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      targetName,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800),
-                    ),
+                    Text(targetName, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800)),
                     const SizedBox(height: 2),
-                    Text(
-                      'Active now',
-                      style: TextStyle(color: Colors.white.withOpacity(0.50), fontSize: 12, fontWeight: FontWeight.w500),
-                    ),
+                    Text('Active now', style: TextStyle(color: Colors.white.withOpacity(0.50), fontSize: 12, fontWeight: FontWeight.w500)),
                   ],
                 ),
               ),
@@ -108,15 +82,8 @@ class ChatDetailsView extends StatelessWidget {
           actions: [
             Container(
               margin: const EdgeInsets.only(right: 14),
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.08),
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.white.withOpacity(0.10)),
-              ),
-              child: IconButton(
-                onPressed: () {},
-                icon: const Icon(Icons.more_vert_rounded, color: Colors.white, size: 22),
-              ),
+              decoration: BoxDecoration(color: Colors.white.withOpacity(0.08), shape: BoxShape.circle, border: Border.all(color: Colors.white.withOpacity(0.10))),
+              child: IconButton(onPressed: () {}, icon: const Icon(Icons.more_vert_rounded, color: Colors.white, size: 22)),
             ),
           ],
         ),
@@ -126,17 +93,9 @@ class ChatDetailsView extends StatelessWidget {
               child: StreamBuilder<QuerySnapshot>(
                 stream: controller.getChatMessages(roomId),
                 builder: (context, snapshot) {
-                  if (snapshot.hasError) {
-                    return _buildStateView(icon: Icons.error_outline_rounded, iconColor: Colors.redAccent, title: 'Error loading messages', subtitle: 'Please check your connection and try again.');
-                  }
-
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator(color: Color(0xFFA855F7)));
-                  }
-
-                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-                    return _buildStateView(icon: Icons.waving_hand_rounded, iconColor: const Color(0xFF22D3EE), title: 'Say Hi! 👋', subtitle: 'Start your conversation with a friendly message.');
-                  }
+                  if (snapshot.hasError) return _buildStateView(icon: Icons.error_outline_rounded, iconColor: Colors.redAccent, title: 'Error', subtitle: 'Connection failed.');
+                  if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator(color: Color(0xFFA855F7)));
+                  if (!snapshot.hasData || snapshot.data!.docs.isEmpty) return _buildStateView(icon: Icons.waving_hand_rounded, iconColor: const Color(0xFF22D3EE), title: 'Say Hi! 👋', subtitle: 'Start your conversation.');
 
                   final docs = snapshot.data!.docs;
 
@@ -149,36 +108,67 @@ class ChatDetailsView extends StatelessWidget {
                       final messageData = docs[index].data() as Map<String, dynamic>;
                       final bool isMe = messageData['senderId'] == controller.myUid.value;
                       final String messageText = (messageData['text'] ?? '').toString();
+                      final String timeStr = controller.formatMessageTime(messageData['timestamp']);
 
                       if (messageText.trim().isEmpty) return const SizedBox.shrink();
 
-                      return _buildMessageBubble(context: context, text: messageText, isMe: isMe);
+                      return _buildMessageBubble(context: context, text: messageText, timeStr: timeStr, isMe: isMe);
                     },
                   );
                 },
               ),
             ),
-            _buildMessageInput(),
+
+            // 🚫 Policy: ব্লক করা থাকলে মেসেজ লেখার বক্স গায়েব করে ওয়ার্নিং দেখাবে
+            Obx(() {
+              if (controller.blockedUsers.contains(targetUid)) {
+                return SafeArea(
+                  top: false,
+                  child: Container(
+                    margin: const EdgeInsets.fromLTRB(14, 6, 14, 12),
+                    padding: const EdgeInsets.all(15),
+                    decoration: BoxDecoration(
+                      color: Colors.redAccent.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.redAccent.withOpacity(0.3)),
+                    ),
+                    child: const Text(
+                      "You blocked this user. Unblock them from Safety Settings to send messages.",
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                );
+              }
+              return _buildMessageInput();
+            }),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildMessageBubble({required BuildContext context, required String text, required bool isMe}) {
+  Widget _buildMessageBubble({required BuildContext context, required String text, required String timeStr, required bool isMe}) {
     return Align(
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
         constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.76),
         margin: EdgeInsets.only(left: isMe ? 50 : 0, right: isMe ? 0 : 50, bottom: 12),
-        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 10),
         decoration: BoxDecoration(
           gradient: isMe ? const LinearGradient(colors: [Color(0xFFA855F7), Color(0xFF7C3AED)], begin: Alignment.topLeft, end: Alignment.bottomRight) : LinearGradient(colors: [Colors.white.withOpacity(0.115), Colors.white.withOpacity(0.055)], begin: Alignment.topLeft, end: Alignment.bottomRight),
           borderRadius: BorderRadius.only(topLeft: const Radius.circular(22), topRight: const Radius.circular(22), bottomLeft: isMe ? const Radius.circular(22) : const Radius.circular(6), bottomRight: isMe ? const Radius.circular(6) : const Radius.circular(22)),
           border: Border.all(color: isMe ? Colors.white.withOpacity(0.10) : Colors.white.withOpacity(0.09)),
           boxShadow: [BoxShadow(color: isMe ? const Color(0xFFA855F7).withOpacity(0.25) : Colors.black.withOpacity(0.18), blurRadius: 16, offset: const Offset(0, 8))],
         ),
-        child: Text(text, style: const TextStyle(color: Colors.white, fontSize: 15.5, height: 1.35, fontWeight: FontWeight.w500)),
+        child: Column(
+          crossAxisAlignment: isMe ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+          children: [
+            Text(text, style: const TextStyle(color: Colors.white, fontSize: 15.5, height: 1.35, fontWeight: FontWeight.w500)),
+            const SizedBox(height: 4),
+            Text(timeStr, style: TextStyle(color: Colors.white.withOpacity(0.5), fontSize: 10, fontWeight: FontWeight.bold)),
+          ],
+        ),
       ),
     );
   }
@@ -187,43 +177,23 @@ class ChatDetailsView extends StatelessWidget {
     return SafeArea(
       top: false,
       child: Container(
-        margin: const EdgeInsets.fromLTRB(14, 6, 14, 12),
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(30),
-          gradient: LinearGradient(colors: [Colors.white.withOpacity(0.115), Colors.white.withOpacity(0.055)], begin: Alignment.topLeft, end: Alignment.bottomRight),
-          border: Border.all(color: Colors.white.withOpacity(0.10)),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.25), blurRadius: 20, offset: const Offset(0, -6))],
-        ),
+        margin: const EdgeInsets.fromLTRB(14, 6, 14, 12), padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+        decoration: BoxDecoration(borderRadius: BorderRadius.circular(30), gradient: LinearGradient(colors: [Colors.white.withOpacity(0.115), Colors.white.withOpacity(0.055)], begin: Alignment.topLeft, end: Alignment.bottomRight), border: Border.all(color: Colors.white.withOpacity(0.10)), boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.25), blurRadius: 20, offset: const Offset(0, -6))]),
         child: Row(
           children: [
-            Container(
-              width: 42, height: 42,
-              decoration: BoxDecoration(color: Colors.white.withOpacity(0.07), shape: BoxShape.circle, border: Border.all(color: Colors.white.withOpacity(0.08))),
-              child: Icon(Icons.emoji_emotions_outlined, color: Colors.white.withOpacity(0.75), size: 22),
-            ),
+            Container(width: 42, height: 42, decoration: BoxDecoration(color: Colors.white.withOpacity(0.07), shape: BoxShape.circle, border: Border.all(color: Colors.white.withOpacity(0.08))), child: Icon(Icons.emoji_emotions_outlined, color: Colors.white.withOpacity(0.75), size: 22)),
             const SizedBox(width: 10),
             Expanded(
               child: TextField(
-                controller: controller.messageController,
-                style: const TextStyle(color: Colors.white, fontSize: 15),
-                minLines: 1, maxLines: 4, textInputAction: TextInputAction.send,
-                onSubmitted: (_) {
-                  controller.sendMessage(roomId, targetUid, targetName, targetAvatar);
-                },
+                controller: controller.messageController, style: const TextStyle(color: Colors.white, fontSize: 15), minLines: 1, maxLines: 4, textInputAction: TextInputAction.send,
+                onSubmitted: (_) => controller.sendMessage(roomId, targetUid, targetName, targetAvatar),
                 decoration: InputDecoration(hintText: 'Type a message...', hintStyle: TextStyle(color: Colors.white.withOpacity(0.42), fontSize: 15), filled: true, fillColor: Colors.transparent, contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 12), border: InputBorder.none),
               ),
             ),
             const SizedBox(width: 8),
             GestureDetector(
-              onTap: () {
-                controller.sendMessage(roomId, targetUid, targetName, targetAvatar);
-              },
-              child: Container(
-                width: 48, height: 48,
-                decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFFA855F7), Color(0xFF22D3EE)], begin: Alignment.topLeft, end: Alignment.bottomRight), shape: BoxShape.circle, boxShadow: [BoxShadow(color: const Color(0xFFA855F7).withOpacity(0.38), blurRadius: 18, offset: const Offset(0, 7))]),
-                child: const Icon(Icons.send_rounded, color: Colors.white, size: 22),
-              ),
+              onTap: () => controller.sendMessage(roomId, targetUid, targetName, targetAvatar),
+              child: Container(width: 48, height: 48, decoration: BoxDecoration(gradient: const LinearGradient(colors: [Color(0xFFA855F7), Color(0xFF22D3EE)], begin: Alignment.topLeft, end: Alignment.bottomRight), shape: BoxShape.circle, boxShadow: [BoxShadow(color: const Color(0xFFA855F7).withOpacity(0.38), blurRadius: 18, offset: const Offset(0, 7))]), child: const Icon(Icons.send_rounded, color: Colors.white, size: 22)),
             ),
           ],
         ),
