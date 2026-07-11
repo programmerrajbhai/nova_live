@@ -35,9 +35,10 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
 
-  font_awesome_flutter: ^10.7.0 # কালারফুল ও প্রফেশনাল আইকনের জন্য
+  font_awesome_flutter: ^10.7.0
   get: ^4.6.6
-  shared_preferences: ^2.2.2  # অটো-লগিনের জন্য নতুন প্যাকেজ
+  shared_preferences: ^2.2.2
+  url_launcher:
 
 
   # 🔥 এই ৩টি লাইন নতুন করে বসাবেন

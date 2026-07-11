@@ -7,48 +7,50 @@ import '../../auth/controller/auth_controller.dart';
 
 class ProfileController extends GetxController {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
+  var myUid = ''.obs;
 
   // Basic Info
   var userName = 'Loading...'.obs;
   var userAvatar = ''.obs;
+  var userBio = 'Hello! I am using Nova Live.'.obs;
   var userLevel = 1.obs;
-  var isVip = false.obs;
 
   // Social Stats
   var followersCount = 0.obs;
   var followingCount = 0.obs;
 
-  // Monetization & Wallet
+  // Wallet
   var myCoins = 0.obs;
-  var totalEarnings = 0.0.obs;
-  var receivedDiamonds = 0.obs; // Live app e gift pele diamond hoy
+  var receivedDiamonds = 0.obs;
 
-  var connectedPayoutMethod = 'PayPal'.obs;
   var isProcessing = false.obs;
 
   @override
   void onInit() {
     super.onInit();
-    fetchUserRealData();
+    _loadUidAndFetchData();
   }
 
-  // 🔥 100% Live Sync with Firebase
-  Future<void> fetchUserRealData() async {
+  Future<void> _loadUidAndFetchData() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    myUid.value = prefs.getString('uid') ?? '';
+    if (myUid.value.isNotEmpty) {
+      fetchUserRealData();
+    }
+  }
+
+  // 🔥 100% Real-time Sync with Firebase
+  void fetchUserRealData() {
     isProcessing.value = true;
     try {
-      SharedPreferences prefs = await SharedPreferences.getInstance();
-      String uid = prefs.getString('uid') ?? '';
-
-      if (uid.isNotEmpty) {
-        // Listening to data in real-time
-        _db.collection('users').doc(uid).snapshots().listen((doc) {
+      if (myUid.value.isNotEmpty) {
+        _db.collection('users').doc(myUid.value).snapshots().listen((doc) {
           if (doc.exists) {
             userName.value = doc['name'] ?? 'Nova User';
             userAvatar.value = doc['avatar'] ?? '';
+            userBio.value = doc['bio'] ?? 'Hello! I am using Nova Live.';
             userLevel.value = doc['level'] ?? 1;
-            isVip.value = doc['isVip'] ?? false;
             myCoins.value = doc['coins'] ?? 0;
-            totalEarnings.value = (doc['totalEarnings'] ?? 0.0).toDouble();
             receivedDiamonds.value = doc['receivedDiamonds'] ?? 0;
             followersCount.value = doc['followers'] ?? 0;
             followingCount.value = doc['following'] ?? 0;
@@ -62,104 +64,77 @@ class ProfileController extends GetxController {
     }
   }
 
-  // 💎 Background Coin Management
-  Future<void> _updateCoinsInFirebase(int amountToChange) async {
+  // 📝 Update Profile Data (Name & Bio)
+  Future<void> updateProfileDetails(String newName, String newBio) async {
+    if (newName.isEmpty) {
+      Get.snackbar('Error', 'Name cannot be empty.', backgroundColor: Colors.redAccent, colorText: Colors.white);
+      return;
+    }
+
+    isProcessing.value = true;
     try {
-      SharedPreferences prefs = await SharedPreferences.getInstance();
-      String uid = prefs.getString('uid') ?? '';
-      if (uid.isNotEmpty) {
-        await _db.collection('users').doc(uid).update({
-          'coins': FieldValue.increment(amountToChange),
+      if (myUid.value.isNotEmpty) {
+        await _db.collection('users').doc(myUid.value).update({
+          'name': newName.trim(),
+          'bio': newBio.trim(),
         });
+        Get.back(); // Close Edit Screen
+        Get.snackbar('Success', 'Profile updated successfully!', backgroundColor: Colors.green, colorText: Colors.white, snackPosition: SnackPosition.BOTTOM);
       }
     } catch (e) {
-      debugPrint("Coin update failed: $e");
+      Get.snackbar('Error', 'Failed to update profile.', backgroundColor: Colors.redAccent, colorText: Colors.white);
+    } finally {
+      isProcessing.value = false;
     }
   }
 
+  // Wallet Top-Up
   Future<void> addCoins(int amount) async {
     isProcessing.value = true;
-    // Local Update
     myCoins.value += amount;
-    // Server Update
-    await _updateCoinsInFirebase(amount);
+    if (myUid.value.isNotEmpty) {
+      await _db.collection('users').doc(myUid.value).update({'coins': FieldValue.increment(amount)});
+    }
     isProcessing.value = false;
   }
 
+  // 🔥 Deduct Coins (Restored for Audio/Live Room Gifts)
   bool deductCoins(int amount) {
     if (myCoins.value >= amount) {
       myCoins.value -= amount;
-      _updateCoinsInFirebase(-amount);
+      if (myUid.value.isNotEmpty) {
+        _db.collection('users').doc(myUid.value).update({'coins': FieldValue.increment(-amount)});
+      }
       return true;
     }
     return false;
   }
 
-  // 💸 Payout Logic
-  Future<void> requestWithdrawal(double amount) async {
-    if (amount < 50.0) {
-      Get.snackbar('Minimum Payout', 'You need at least \$50 to withdraw.', backgroundColor: Colors.redAccent, colorText: Colors.white);
-      return;
-    }
-    if (amount > totalEarnings.value) {
-      Get.snackbar('Invalid Amount', 'Insufficient earnings.', backgroundColor: Colors.redAccent, colorText: Colors.white);
-      return;
-    }
-
-    isProcessing.value = true;
-    Get.snackbar('Processing...', 'Transferring to ${connectedPayoutMethod.value}.', backgroundColor: Colors.orangeAccent, colorText: Colors.black);
-    await Future.delayed(const Duration(seconds: 3));
-
-    totalEarnings.value -= amount;
-
-    // Server Thekeo deduction kora uchit
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    String uid = prefs.getString('uid') ?? '';
-    await _db.collection('users').doc(uid).update({
-      'totalEarnings': FieldValue.increment(-amount),
-    });
-
-    isProcessing.value = false;
-    Get.snackbar('Success ✅', 'Withdrawal successful.', backgroundColor: Colors.greenAccent, colorText: Colors.black);
-  }
-
-  // 🚪 100% Perfect Logout
+  // 🚪 Perfect Logout
   Future<void> logOut() async {
     isProcessing.value = true;
     SharedPreferences prefs = await SharedPreferences.getInstance();
-
-    // Ekhane presence false kore dewa bhalo (if available)
-    String uid = prefs.getString('uid') ?? '';
-    if(uid.isNotEmpty) {
-      await _db.collection('users').doc(uid).update({'isOnline': false});
+    if(myUid.value.isNotEmpty) {
+      await _db.collection('users').doc(myUid.value).update({'isOnline': false});
     }
-
     await prefs.clear();
-
     if (Get.isRegistered<AuthController>()) Get.find<AuthController>().isAgreed.value = false;
     Get.offAll(() => LoginView(), transition: Transition.fadeIn);
     isProcessing.value = false;
   }
 
-  // 🗑️ Delete Account (Complete Wipe)
+  // 🗑️ Delete Account
   Future<void> deleteUserAccount() async {
     isProcessing.value = true;
     try {
       SharedPreferences prefs = await SharedPreferences.getInstance();
-      String uid = prefs.getString('uid') ?? '';
-
-      if (uid.isNotEmpty) {
-        // Firebase Cloud Function thakle bhalo, otherwise delete from client
-        await _db.collection('users').doc(uid).delete();
+      if (myUid.value.isNotEmpty) {
+        await _db.collection('users').doc(myUid.value).delete();
       }
-
       await prefs.clear();
-      myCoins.value = 0;
-      totalEarnings.value = 0.0;
-
       if (Get.isRegistered<AuthController>()) Get.find<AuthController>().isAgreed.value = false;
       Get.offAll(() => LoginView(), transition: Transition.fadeIn);
-      Get.snackbar('Account Deleted', 'Your data has been removed permanently from our servers.', backgroundColor: Colors.redAccent, colorText: Colors.white);
+      Get.snackbar('Account Deleted', 'Your data has been removed permanently.', backgroundColor: Colors.redAccent, colorText: Colors.white);
     } catch (e) {
       Get.snackbar('Error', 'Failed to delete account.', backgroundColor: Colors.redAccent, colorText: Colors.white);
     } finally {
