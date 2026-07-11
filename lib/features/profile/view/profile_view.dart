@@ -1,26 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-import 'package:url_launcher/url_launcher.dart'; // Add this in pubspec.yaml if not added
 
 import '../../../core/widgets/premium_background.dart';
 import '../controller/profile_controller.dart';
 import '../../messages/view/settings_view.dart';
-import 'edit_profile_view.dart'; // 🔥 Import Edit Profile
+import 'edit_profile_view.dart';
+import '../../legal/view/privacy_policy_view.dart'; // 🔥 Import New Privacy Screen
 
 class ProfileView extends StatelessWidget {
   final ProfileController controller = Get.put(ProfileController());
 
   ProfileView({super.key});
-
-  void _openPrivacyPolicy() async {
-    const url = 'https://policies.google.com/privacy'; // Replace with your actual privacy policy URL
-    if (await canLaunchUrl(Uri.parse(url))) {
-      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-    } else {
-      Get.snackbar('Error', 'Could not open Privacy Policy.', backgroundColor: Colors.redAccent);
-    }
-  }
 
   void _showLogoutDialog() {
     Get.defaultDialog(
@@ -109,14 +100,12 @@ class ProfileView extends StatelessWidget {
                       Text(controller.userName.value, style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
                       const SizedBox(height: 8),
 
-                      // 🔥 Bio Show Korbe
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 20),
                         child: Text(controller.userBio.value, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70, fontSize: 13)),
                       ),
                       const SizedBox(height: 15),
 
-                      // 🔥 Edit Profile Button
                       GestureDetector(
                         onTap: () => Get.to(() => const EditProfileView(), transition: Transition.downToUp),
                         child: Container(
@@ -191,10 +180,12 @@ class ProfileView extends StatelessWidget {
                 ),
                 const SizedBox(height: 25),
 
-                // ৪. Core Settings (Privacy Policy Added)
+                // ৪. Core Settings (Privacy Policy Screen Connected)
                 _buildMenuCard([
-                  _buildMenuItem(FontAwesomeIcons.userShield, 'Privacy & Safety', Colors.indigoAccent, onTap: () => Get.to(() => SettingsView())),
-                  _buildMenuItem(FontAwesomeIcons.fileContract, 'Terms & Privacy Policy', Colors.cyanAccent, onTap: _openPrivacyPolicy), // 🔥 Required by Google Play
+                  _buildMenuItem(FontAwesomeIcons.userShield, 'Privacy & Safety', Colors.indigoAccent, onTap: () => Get.to(() => SettingsView(), transition: Transition.rightToLeftWithFade)),
+
+                  // 🔥 Navigates to App's Internal Privacy Policy Screen
+                  _buildMenuItem(FontAwesomeIcons.fileContract, 'Terms & Privacy Policy', Colors.cyanAccent, onTap: () => Get.to(() => const PrivacyPolicyView(), transition: Transition.rightToLeftWithFade)),
                 ]),
                 const SizedBox(height: 20),
 
