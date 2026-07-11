@@ -6,10 +6,22 @@ import '../../auth/view/login_view.dart';
 import '../../auth/controller/auth_controller.dart';
 
 class ProfileController extends GetxController {
+  final FirebaseFirestore _db = FirebaseFirestore.instance;
+
+  // Basic Info
   var userName = 'Loading...'.obs;
   var userAvatar = ''.obs;
+  var userLevel = 1.obs;
+  var isVip = false.obs;
+
+  // Social Stats
+  var followersCount = 0.obs;
+  var followingCount = 0.obs;
+
+  // Monetization & Wallet
   var myCoins = 0.obs;
   var totalEarnings = 0.0.obs;
+  var receivedDiamonds = 0.obs; // Live app e gift pele diamond hoy
 
   var connectedPayoutMethod = 'PayPal'.obs;
   var isProcessing = false.obs;
@@ -20,7 +32,7 @@ class ProfileController extends GetxController {
     fetchUserRealData();
   }
 
-  // ফায়ারবেস থেকে ইউজারের সব ডেটা রিয়েল-টাইমে নিয়ে আসা
+  // 🔥 100% Live Sync with Firebase
   Future<void> fetchUserRealData() async {
     isProcessing.value = true;
     try {
@@ -28,93 +40,120 @@ class ProfileController extends GetxController {
       String uid = prefs.getString('uid') ?? '';
 
       if (uid.isNotEmpty) {
-        DocumentSnapshot doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
-
-        if (doc.exists) {
-          userName.value = doc['name'] ?? 'Nova User';
-          userAvatar.value = doc['avatar'] ?? '';
-          myCoins.value = doc['coins'] ?? 0;
-          totalEarnings.value = (doc['totalEarnings'] ?? 0.0).toDouble();
-        }
+        // Listening to data in real-time
+        _db.collection('users').doc(uid).snapshots().listen((doc) {
+          if (doc.exists) {
+            userName.value = doc['name'] ?? 'Nova User';
+            userAvatar.value = doc['avatar'] ?? '';
+            userLevel.value = doc['level'] ?? 1;
+            isVip.value = doc['isVip'] ?? false;
+            myCoins.value = doc['coins'] ?? 0;
+            totalEarnings.value = (doc['totalEarnings'] ?? 0.0).toDouble();
+            receivedDiamonds.value = doc['receivedDiamonds'] ?? 0;
+            followersCount.value = doc['followers'] ?? 0;
+            followingCount.value = doc['following'] ?? 0;
+          }
+        });
       }
     } catch (e) {
-      print("Error fetching user data: $e");
+      debugPrint("Error fetching user data: $e");
     } finally {
       isProcessing.value = false;
     }
   }
 
-  // 🔥 ব্যাকগ্রাউন্ডে ফায়ারবেসের কয়েন আপডেট করার হেল্পার মেথড
+  // 💎 Background Coin Management
   Future<void> _updateCoinsInFirebase(int amountToChange) async {
     try {
       SharedPreferences prefs = await SharedPreferences.getInstance();
       String uid = prefs.getString('uid') ?? '';
       if (uid.isNotEmpty) {
-        await FirebaseFirestore.instance.collection('users').doc(uid).update({
-          // FieldValue.increment ব্যবহার করলে সার্ভারে অটোমেটিক প্লাস/মাইনাস হয়
+        await _db.collection('users').doc(uid).update({
           'coins': FieldValue.increment(amountToChange),
         });
       }
     } catch (e) {
-      print("Coin update failed: $e");
+      debugPrint("Coin update failed: $e");
     }
   }
 
-  // ১. কয়েন টপ-আপ (লোকাল + ফায়ারবেস)
   Future<void> addCoins(int amount) async {
     isProcessing.value = true;
-    myCoins.value += amount; // লোকাল UI তে সাথে সাথে বাড়বে
-    await _updateCoinsInFirebase(amount); // ফায়ারবেসে বাড়বে
+    // Local Update
+    myCoins.value += amount;
+    // Server Update
+    await _updateCoinsInFirebase(amount);
     isProcessing.value = false;
   }
 
-  // ২. গিফট পাঠানোর সময় কয়েন কাটা (যেটার এরর আসছিল)
   bool deductCoins(int amount) {
     if (myCoins.value >= amount) {
-      myCoins.value -= amount; // সাথে সাথে UI আপডেট হবে
-      _updateCoinsInFirebase(-amount); // ব্যাকগ্রাউন্ডে ফায়ারবেস থেকে কেটে নেবে
+      myCoins.value -= amount;
+      _updateCoinsInFirebase(-amount);
       return true;
     }
-    return false; // ব্যালেন্স না থাকলে false রিটার্ন করবে
+    return false;
   }
 
-  // উইথড্র লজিক
+  // 💸 Payout Logic
   Future<void> requestWithdrawal(double amount) async {
+    if (amount < 50.0) {
+      Get.snackbar('Minimum Payout', 'You need at least \$50 to withdraw.', backgroundColor: Colors.redAccent, colorText: Colors.white);
+      return;
+    }
     if (amount > totalEarnings.value) {
       Get.snackbar('Invalid Amount', 'Insufficient earnings.', backgroundColor: Colors.redAccent, colorText: Colors.white);
       return;
     }
+
     isProcessing.value = true;
     Get.snackbar('Processing...', 'Transferring to ${connectedPayoutMethod.value}.', backgroundColor: Colors.orangeAccent, colorText: Colors.black);
     await Future.delayed(const Duration(seconds: 3));
+
     totalEarnings.value -= amount;
+
+    // Server Thekeo deduction kora uchit
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    String uid = prefs.getString('uid') ?? '';
+    await _db.collection('users').doc(uid).update({
+      'totalEarnings': FieldValue.increment(-amount),
+    });
+
     isProcessing.value = false;
     Get.snackbar('Success ✅', 'Withdrawal successful.', backgroundColor: Colors.greenAccent, colorText: Colors.black);
   }
 
-  // লগ-আউট
+  // 🚪 100% Perfect Logout
   Future<void> logOut() async {
+    isProcessing.value = true;
     SharedPreferences prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('isLoggedIn', false);
+
+    // Ekhane presence false kore dewa bhalo (if available)
+    String uid = prefs.getString('uid') ?? '';
+    if(uid.isNotEmpty) {
+      await _db.collection('users').doc(uid).update({'isOnline': false});
+    }
+
+    await prefs.clear();
 
     if (Get.isRegistered<AuthController>()) Get.find<AuthController>().isAgreed.value = false;
     Get.offAll(() => LoginView(), transition: Transition.fadeIn);
+    isProcessing.value = false;
   }
 
-  // ডেটা ডিলিশন
+  // 🗑️ Delete Account (Complete Wipe)
   Future<void> deleteUserAccount() async {
     isProcessing.value = true;
     try {
       SharedPreferences prefs = await SharedPreferences.getInstance();
       String uid = prefs.getString('uid') ?? '';
 
-      // ফায়ারবেস থেকে রিয়েল ডেটা ডিলিট করা
       if (uid.isNotEmpty) {
-        await FirebaseFirestore.instance.collection('users').doc(uid).delete();
+        // Firebase Cloud Function thakle bhalo, otherwise delete from client
+        await _db.collection('users').doc(uid).delete();
       }
 
-      await prefs.clear(); // লোকাল স্টোরেজ ক্লিয়ার
-
+      await prefs.clear();
       myCoins.value = 0;
       totalEarnings.value = 0.0;
 
