@@ -14,9 +14,7 @@ class ProfileView extends StatelessWidget {
 
   ProfileView({super.key});
 
-  // 🔥 ওয়েব থেকে অ্যাকাউন্ট ডিলিট রিকোয়েস্ট করার লিংক
   void _openWebDeletionForm() async {
-    // ⚠️ TODO: Replace with your actual Google Form or Website link
     const url = 'https://yourdomain.com/nova-live/delete-account';
     if (await canLaunchUrl(Uri.parse(url))) {
       await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
@@ -35,7 +33,6 @@ class ProfileView extends StatelessWidget {
       textConfirm: "Log Out",
       textCancel: "Cancel",
       confirmTextColor: Colors.white,
-      cancelTextColor: Colors.white,
       buttonColor: Colors.orangeAccent,
       onConfirm: () {
         Get.back();
@@ -48,18 +45,123 @@ class ProfileView extends StatelessWidget {
     Get.defaultDialog(
       title: "Delete Account?",
       titleStyle: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold),
-      middleText: "This action cannot be undone. All your data will be permanently deleted from our servers.",
+      middleText: "This action cannot be undone. All your data will be permanently deleted.",
       middleTextStyle: const TextStyle(color: Colors.grey),
       backgroundColor: const Color(0xFF1E1E1E),
       textConfirm: "Delete Permanently",
       textCancel: "Cancel",
       confirmTextColor: Colors.white,
-      cancelTextColor: Colors.white,
       buttonColor: Colors.redAccent,
       onConfirm: () {
         Get.back();
-        controller.deleteUserAccount(); // App-এর ভেতরের ডিলিট ফাংশন
+        controller.deleteUserAccount();
       },
+    );
+  }
+
+  // 🚀 OTHIR UI: Earn Free Coins Bottom Sheet
+  void _showEarnCoinsSheet() {
+    Get.bottomSheet(
+      Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: const Color(0xFF1A1A2E).withOpacity(0.95),
+          borderRadius: const BorderRadius.only(topLeft: Radius.circular(30), topRight: Radius.circular(30)),
+          border: Border.all(color: Colors.purpleAccent.withOpacity(0.3), width: 1.5),
+          boxShadow: [BoxShadow(color: Colors.purpleAccent.withOpacity(0.2), blurRadius: 30, offset: const Offset(0, -5))],
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(width: 50, height: 5, decoration: BoxDecoration(color: Colors.white38, borderRadius: BorderRadius.circular(10))),
+            const SizedBox(height: 20),
+            const Text('Earn Free Coins 🪙', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 10),
+            const Text('Complete tasks to get free coins for live rooms!', style: TextStyle(color: Colors.white54, fontSize: 13)),
+            const SizedBox(height: 30),
+
+            // 🎁 Daily Reward Card
+            Obx(() => Container(
+              padding: const EdgeInsets.all(15),
+              decoration: BoxDecoration(
+                color: controller.canClaimDaily.value ? Colors.green.withOpacity(0.1) : Colors.white.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: controller.canClaimDaily.value ? Colors.greenAccent : Colors.white10),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(color: Colors.greenAccent.withOpacity(0.2), shape: BoxShape.circle),
+                    child: const Icon(FontAwesomeIcons.gift, color: Colors.greenAccent, size: 24),
+                  ),
+                  const SizedBox(width: 15),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Daily Check-in', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                        Text(controller.canClaimDaily.value ? 'Claim 30 coins now!' : 'Come back tomorrow', style: const TextStyle(color: Colors.white54, fontSize: 12)),
+                      ],
+                    ),
+                  ),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: controller.canClaimDaily.value ? Colors.greenAccent : Colors.grey.withOpacity(0.3),
+                      foregroundColor: controller.canClaimDaily.value ? Colors.black : Colors.white54,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    ),
+                    onPressed: controller.canClaimDaily.value ? () => controller.claimDailyReward() : null,
+                    child: Text(controller.canClaimDaily.value ? 'Claim' : 'Done'),
+                  )
+                ],
+              ),
+            )),
+            const SizedBox(height: 15),
+
+            // 🎮 Watch Video Ad Card
+            Obx(() => Container(
+              padding: const EdgeInsets.all(15),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(colors: [Colors.purpleAccent.withOpacity(0.2), Colors.cyanAccent.withOpacity(0.1)]),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: Colors.cyanAccent.withOpacity(0.5)),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(color: Colors.purpleAccent.withOpacity(0.2), shape: BoxShape.circle),
+                    child: const Icon(FontAwesomeIcons.play, color: Colors.cyanAccent, size: 24),
+                  ),
+                  const SizedBox(width: 15),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('Watch Video', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                        const Text('Get 50 coins instantly', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                      ],
+                    ),
+                  ),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: controller.isAdLoaded.value ? Colors.purpleAccent : Colors.grey.withOpacity(0.3),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                    ),
+                    onPressed: controller.isAdLoaded.value ? () => controller.showRewardedAd() : null,
+                    child: controller.isAdLoading.value
+                        ? const SizedBox(height: 15, width: 15, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                        : const Text('Watch', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  )
+                ],
+              ),
+            )),
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+      isScrollControlled: true,
     );
   }
 
@@ -149,14 +251,14 @@ class ProfileView extends StatelessWidget {
                 ),
                 const SizedBox(height: 30),
 
-                // ৩. Wallet Card
+                // 🚀 ৩. Wallet Card (Updated to Reward System)
                 Container(
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
                     gradient: LinearGradient(colors: [Colors.white.withOpacity(0.1), Colors.white.withOpacity(0.05)], begin: Alignment.topLeft, end: Alignment.bottomRight),
                     borderRadius: BorderRadius.circular(25),
-                    border: Border.all(color: Colors.orangeAccent.withOpacity(0.4), width: 1.5),
-                    boxShadow: [BoxShadow(color: Colors.orangeAccent.withOpacity(0.15), blurRadius: 20, offset: const Offset(0, 5))],
+                    border: Border.all(color: Colors.purpleAccent.withOpacity(0.4), width: 1.5),
+                    boxShadow: [BoxShadow(color: Colors.purpleAccent.withOpacity(0.15), blurRadius: 20, offset: const Offset(0, 5))],
                   ),
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -176,15 +278,16 @@ class ProfileView extends StatelessWidget {
                         ],
                       ),
                       Container(
-                        decoration: BoxDecoration(gradient: const LinearGradient(colors: [Colors.orangeAccent, Colors.deepOrangeAccent]), borderRadius: BorderRadius.circular(20)),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(colors: [Colors.purpleAccent, Colors.cyanAccent]),
+                          borderRadius: BorderRadius.circular(20),
+                          boxShadow: [BoxShadow(color: Colors.purpleAccent.withOpacity(0.4), blurRadius: 10, offset: const Offset(0, 3))],
+                        ),
                         child: ElevatedButton.icon(
                           style: ElevatedButton.styleFrom(backgroundColor: Colors.transparent, shadowColor: Colors.transparent, padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12)),
-                          onPressed: () {
-                            controller.addCoins(100);
-                            Get.snackbar('Recharge Successful', '100 Coins added.', backgroundColor: Colors.green, colorText: Colors.white);
-                          },
-                          icon: const Icon(FontAwesomeIcons.plus, color: Colors.white, size: 16),
-                          label: const Text('Top Up', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                          onPressed: _showEarnCoinsSheet, // 🔥 ওপেন হবে Bottom Sheet
+                          icon: const Icon(FontAwesomeIcons.gift, color: Colors.white, size: 16),
+                          label: const Text('Earn Coins', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
                         ),
                       )
                     ],
@@ -199,12 +302,10 @@ class ProfileView extends StatelessWidget {
                 ]),
                 const SizedBox(height: 20),
 
-                // ৫. Account Actions (Play Store Policy Full Compliance)
+                // ৫. Account Actions
                 _buildMenuCard([
                   _buildMenuItem(FontAwesomeIcons.rightFromBracket, 'Log Out', Colors.orangeAccent, onTap: _showLogoutDialog),
                   _buildMenuItem(FontAwesomeIcons.trash, 'Delete Account (In-App)', Colors.redAccent, onTap: _showDeleteAccountDialog),
-
-                  // 🔥 New Policy Feature Added Here
                   _buildMenuItem(FontAwesomeIcons.globe, 'Delete My Data Online', Colors.blueGrey, onTap: _openWebDeletionForm),
                 ]),
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
 
 // 🔥 ZegoCloud Signaling Plugin
 import 'package:zego_uikit/zego_uikit.dart';
@@ -14,7 +15,7 @@ void main() async {
 
   // ফায়ারবেস ইনিশিয়ালাইজেশন
   await Firebase.initializeApp();
-
+  await MobileAds.instance.initialize();
   // 🔥 মাস্টার ফিক্স ১: অ্যাপের শুরুতেই সিগনালিং ইঞ্জিন ইন্সটল করে দিলাম
   ZegoUIKit().installPlugins([ZegoUIKitSignalingPlugin()]);
 
