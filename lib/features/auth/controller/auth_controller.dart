@@ -1,9 +1,11 @@
+import 'dart:io';
 import 'package:get/get.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:firebase_auth/firebase_auth.dart'; // 🔥 ফায়ারবেস অথেনটিকেশন
-import 'package:cloud_firestore/cloud_firestore.dart'; // 🔥 ফায়ারবেস ফায়ারস্টোর
-import 'package:permission_handler/permission_handler.dart'; // 🔥 পারমিশন প্যাকেজ
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:image_picker/image_picker.dart'; // 🔥 ইমেজ পিকার প্যাকেজ
 import '../../main_nav/view/main_nav_view.dart';
 
 class AuthController extends GetxController {
@@ -15,6 +17,10 @@ class AuthController extends GetxController {
   var selectedGender = 'Male'.obs;
   var dobString = ''.obs;
   var calculatedAge = 0.obs;
+
+  // 🔥 ইমেজ পিকার এবং লোকাল ইমেজের জন্য ভেরিয়েবল
+  final ImagePicker _picker = ImagePicker();
+  var selectedLocalImagePath = ''.obs;
 
   final List<String> defaultAvatars = [
     'https://cdn-icons-png.flaticon.com/512/3135/3135715.png',
@@ -43,15 +49,14 @@ class AuthController extends GetxController {
       await prefs.setBool('isLoggedIn', true);
       isLoading.value = false;
 
-      // 🔥 সরাসরি হোম পেজে না গিয়ে আগে পারমিশন চেক করবে
       _checkPermissionsAndNavigate();
-
     } else {
       nameController.clear();
       selectedGender.value = 'Male';
       dobString.value = '';
       calculatedAge.value = 0;
       selectedAvatar.value = defaultAvatars[0];
+      selectedLocalImagePath.value = ''; // ক্লিয়ার করা হলো
 
       _showProfileSetupSheet();
     }
@@ -94,6 +99,71 @@ class AuthController extends GetxController {
     }
   }
 
+  // ==========================================
+  // 📸 PRO-LEVEL: Gallery Permission Disclosure & Image Picker
+  // ==========================================
+
+  Future<void> pickCustomAvatar() async {
+    // ১. গ্যালারি ওপেন করার আগে Play Store Policy অনুযায়ী পারমিশন ডায়ালগ দেখাবে
+    bool userGaveConsent = await _showPhotoPermissionDisclosure();
+
+    if (userGaveConsent) {
+      try {
+        final XFile? pickedFile = await _picker.pickImage(
+          source: ImageSource.gallery,
+          imageQuality: 80,
+        );
+
+        if (pickedFile != null) {
+          selectedLocalImagePath.value = pickedFile.path;
+          selectedAvatar.value = ''; // ডিফল্ট এভাটার ক্লিয়ার করে দিলাম
+        }
+      } catch (e) {
+        Get.snackbar('Error', 'Failed to pick image: $e', backgroundColor: Colors.redAccent, colorText: Colors.white);
+      }
+    }
+  }
+
+  Future<bool> _showPhotoPermissionDisclosure() async {
+    bool consent = false;
+
+    await Get.defaultDialog(
+      title: "Photo Access Required",
+      titleStyle: const TextStyle(color: Colors.purpleAccent, fontWeight: FontWeight.bold, fontSize: 18),
+      backgroundColor: const Color(0xFF1E1E1E),
+      radius: 15,
+      content: const Column(
+        children: [
+          Icon(Icons.photo_library_rounded, size: 50, color: Colors.purpleAccent),
+          SizedBox(height: 15),
+          Text(
+            "Nova Live needs access to your photo library so you can choose a custom profile picture or live room logo.",
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.white70, fontSize: 14, height: 1.4),
+          ),
+        ],
+      ),
+      barrierDismissible: false,
+      cancel: TextButton(
+        onPressed: () {
+          consent = false;
+          Get.back();
+        },
+        child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
+      ),
+      confirm: ElevatedButton(
+        style: ElevatedButton.styleFrom(backgroundColor: Colors.purpleAccent),
+        onPressed: () {
+          consent = true;
+          Get.back();
+        },
+        child: const Text("Allow Access", style: TextStyle(color: Colors.white)),
+      ),
+    );
+
+    return consent;
+  }
+
   void _showProfileSetupSheet() {
     Get.bottomSheet(
       Container(
@@ -116,29 +186,64 @@ class AuthController extends GetxController {
               child: Text('Choose Avatar', style: TextStyle(color: Colors.grey, fontSize: 13, fontWeight: FontWeight.bold)),
             ),
             const SizedBox(height: 10),
+
+            // 🔥 Updated Avatar Section: Camera Icon for Gallery + Default Avatars
             SizedBox(
               height: 75,
-              child: ListView.builder(
-                scrollDirection: Axis.horizontal,
-                itemCount: defaultAvatars.length,
-                itemBuilder: (context, index) {
-                  return GestureDetector(
-                    onTap: () => selectedAvatar.value = defaultAvatars[index],
+              child: Row(
+                children: [
+                  // কাস্টম ছবি আপলোড বাটন
+                  GestureDetector(
+                    onTap: pickCustomAvatar,
                     child: Obx(() {
-                      bool isSelected = selectedAvatar.value == defaultAvatars[index];
+                      bool hasLocalImage = selectedLocalImagePath.value.isNotEmpty;
                       return Container(
                         margin: const EdgeInsets.only(right: 15),
                         padding: const EdgeInsets.all(3),
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
-                          border: Border.all(color: isSelected ? Colors.purpleAccent : Colors.transparent, width: 3),
-                          boxShadow: isSelected ? [BoxShadow(color: Colors.purpleAccent.withOpacity(0.5), blurRadius: 10)] : [],
+                          border: Border.all(color: hasLocalImage ? Colors.purpleAccent : Colors.white24, width: hasLocalImage ? 3 : 1),
+                          boxShadow: hasLocalImage ? [BoxShadow(color: Colors.purpleAccent.withOpacity(0.5), blurRadius: 10)] : [],
                         ),
-                        child: CircleAvatar(radius: 30, backgroundColor: Colors.white10, backgroundImage: NetworkImage(defaultAvatars[index])),
+                        child: CircleAvatar(
+                          radius: 30,
+                          backgroundColor: Colors.white10,
+                          backgroundImage: hasLocalImage ? FileImage(File(selectedLocalImagePath.value)) : null,
+                          child: hasLocalImage ? null : const Icon(Icons.add_a_photo, color: Colors.purpleAccent, size: 24),
+                        ),
                       );
                     }),
-                  );
-                },
+                  ),
+
+                  // ডিফল্ট এভাটার লিস্ট
+                  Expanded(
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: defaultAvatars.length,
+                      itemBuilder: (context, index) {
+                        return GestureDetector(
+                          onTap: () {
+                            selectedAvatar.value = defaultAvatars[index];
+                            selectedLocalImagePath.value = ''; // ডিফল্ট সিলেক্ট করলে লোকাল রিমুভ হবে
+                          },
+                          child: Obx(() {
+                            bool isSelected = selectedAvatar.value == defaultAvatars[index];
+                            return Container(
+                              margin: const EdgeInsets.only(right: 15),
+                              padding: const EdgeInsets.all(3),
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                border: Border.all(color: isSelected ? Colors.purpleAccent : Colors.transparent, width: 3),
+                                boxShadow: isSelected ? [BoxShadow(color: Colors.purpleAccent.withOpacity(0.5), blurRadius: 10)] : [],
+                              ),
+                              child: CircleAvatar(radius: 30, backgroundColor: Colors.white10, backgroundImage: NetworkImage(defaultAvatars[index])),
+                            );
+                          }),
+                        );
+                      },
+                    ),
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: 20),
@@ -247,12 +352,19 @@ class AuthController extends GetxController {
       UserCredential userCredential = await FirebaseAuth.instance.signInAnonymously();
       String uid = userCredential.user!.uid;
 
+      // 💡 নোট: যদি ইউজার লোকাল ছবি (গ্যালারি থেকে) সিলেক্ট করে থাকে,
+      // তাহলে ভবিষ্যতে এখানে Firebase Storage-এ ছবি আপলোড করার লজিক বসিয়ে ছবির URL টা নিতে পারবেন।
+      // আপাতত আমি `selectedAvatar` এ লোকাল ফাইলের পাথ অথবা ডিফল্ট URL সেভ করছি।
+      String finalAvatarToSave = selectedLocalImagePath.value.isNotEmpty
+          ? selectedLocalImagePath.value
+          : selectedAvatar.value;
+
       await FirebaseFirestore.instance.collection('users').doc(uid).set({
         'uid': uid,
         'name': name,
         'gender': selectedGender.value,
         'dob': dobString.value,
-        'avatar': selectedAvatar.value,
+        'avatar': finalAvatarToSave,
         'coins': 500,
         'totalEarnings': 0.0,
         'createdAt': FieldValue.serverTimestamp(),
@@ -262,12 +374,11 @@ class AuthController extends GetxController {
       await prefs.setBool('hasAccount', true);
       await prefs.setBool('isLoggedIn', true);
       await prefs.setString('uid', uid);
-      await prefs.setString('userName', name); // ইউজারের নাম সেভ করে রাখলাম
+      await prefs.setString('userName', name);
 
       isLoading.value = false;
       Get.back();
 
-      // 🔥 অ্যাকাউন্ট খোলার পর পারমিশন চেক করতে পাঠাবে
       _checkPermissionsAndNavigate();
 
     } catch (e) {
@@ -277,7 +388,7 @@ class AuthController extends GetxController {
   }
 
   // ==========================================
-  // 🔥 Google Play Policy Compliant Permission Flow
+  // 🔥 Camera & Mic Permission Flow
   // ==========================================
 
   Future<void> _checkPermissionsAndNavigate() async {
