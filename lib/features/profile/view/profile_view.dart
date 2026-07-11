@@ -1,17 +1,29 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/widgets/premium_background.dart';
 import '../controller/profile_controller.dart';
 import '../../messages/view/settings_view.dart';
 import 'edit_profile_view.dart';
-import '../../legal/view/privacy_policy_view.dart'; // 🔥 Import New Privacy Screen
+import '../../legal/view/privacy_policy_view.dart';
 
 class ProfileView extends StatelessWidget {
   final ProfileController controller = Get.put(ProfileController());
 
   ProfileView({super.key});
+
+  // 🔥 ওয়েব থেকে অ্যাকাউন্ট ডিলিট রিকোয়েস্ট করার লিংক
+  void _openWebDeletionForm() async {
+    // ⚠️ TODO: Replace with your actual Google Form or Website link
+    const url = 'https://yourdomain.com/nova-live/delete-account';
+    if (await canLaunchUrl(Uri.parse(url))) {
+      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+    } else {
+      Get.snackbar('Error', 'Could not open the deletion form.', backgroundColor: Colors.redAccent, colorText: Colors.white);
+    }
+  }
 
   void _showLogoutDialog() {
     Get.defaultDialog(
@@ -36,17 +48,17 @@ class ProfileView extends StatelessWidget {
     Get.defaultDialog(
       title: "Delete Account?",
       titleStyle: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold),
-      middleText: "This action cannot be undone. All your data will be permanently deleted.",
+      middleText: "This action cannot be undone. All your data will be permanently deleted from our servers.",
       middleTextStyle: const TextStyle(color: Colors.grey),
       backgroundColor: const Color(0xFF1E1E1E),
-      textConfirm: "Delete",
+      textConfirm: "Delete Permanently",
       textCancel: "Cancel",
       confirmTextColor: Colors.white,
       cancelTextColor: Colors.white,
       buttonColor: Colors.redAccent,
       onConfirm: () {
         Get.back();
-        controller.deleteUserAccount();
+        controller.deleteUserAccount(); // App-এর ভেতরের ডিলিট ফাংশন
       },
     );
   }
@@ -180,19 +192,20 @@ class ProfileView extends StatelessWidget {
                 ),
                 const SizedBox(height: 25),
 
-                // ৪. Core Settings (Privacy Policy Screen Connected)
+                // ৪. Legal & Safety
                 _buildMenuCard([
                   _buildMenuItem(FontAwesomeIcons.userShield, 'Privacy & Safety', Colors.indigoAccent, onTap: () => Get.to(() => SettingsView(), transition: Transition.rightToLeftWithFade)),
-
-                  // 🔥 Navigates to App's Internal Privacy Policy Screen
                   _buildMenuItem(FontAwesomeIcons.fileContract, 'Terms & Privacy Policy', Colors.cyanAccent, onTap: () => Get.to(() => const PrivacyPolicyView(), transition: Transition.rightToLeftWithFade)),
                 ]),
                 const SizedBox(height: 20),
 
-                // ৫. Account Actions
+                // ৫. Account Actions (Play Store Policy Full Compliance)
                 _buildMenuCard([
                   _buildMenuItem(FontAwesomeIcons.rightFromBracket, 'Log Out', Colors.orangeAccent, onTap: _showLogoutDialog),
-                  _buildMenuItem(FontAwesomeIcons.trash, 'Delete Account', Colors.redAccent, onTap: _showDeleteAccountDialog),
+                  _buildMenuItem(FontAwesomeIcons.trash, 'Delete Account (In-App)', Colors.redAccent, onTap: _showDeleteAccountDialog),
+
+                  // 🔥 New Policy Feature Added Here
+                  _buildMenuItem(FontAwesomeIcons.globe, 'Delete My Data Online', Colors.blueGrey, onTap: _openWebDeletionForm),
                 ]),
 
                 const SizedBox(height: 30),

@@ -72,35 +72,81 @@ class MatchingController extends GetxController {
     }
   }
 
+  // 🚫 প্লে স্টোর পলিসি: ব্লক করা ইউজারদের ফিল্টার করার লজিক
+  Future<bool> canMatchWith(String targetUid) async {
+    if (myUid.value.isEmpty || targetUid.isEmpty) return false;
+
+    try {
+      // চেক ১: আমি তাকে ব্লক করেছি কিনা?
+      final iBlocked = await _db
+          .collection('users')
+          .doc(myUid.value)
+          .collection('blocked_users')
+          .doc(targetUid)
+          .get();
+
+      // চেক ২: সে আমাকে ব্লক করেছে কিনা?
+      final theyBlockedMe = await _db
+          .collection('users')
+          .doc(targetUid)
+          .collection('blocked_users')
+          .doc(myUid.value)
+          .get();
+
+      // যদি দুজনের কেউই ব্লক না করে থাকে, তবেই true রিটার্ন করবে
+      return !iBlocked.exists && !theyBlockedMe.exists;
+    } catch (e) {
+      print("Error checking block status: $e");
+      return false; // সেফটির জন্য এরর হলে ইউজারকে স্কিপ করবে
+    }
+  }
+
+  // 🔄 স্মার্ট ম্যাচিং সিস্টেম
   void startMatching() async {
     if (myUid.value.isEmpty) return;
     isSearching.value = true;
 
     try {
+      // একসাথে ১০ জনকে খুঁজবে, যাতে ব্লক করা ইউজার থাকলে স্কিপ করা যায়
       var waitingUsers = await _db
           .collection('searching_users')
           .where('matchedWith', isNull: true)
-          .limit(1)
+          .limit(10)
           .get();
 
-      if (waitingUsers.docs.isNotEmpty && waitingUsers.docs.first.id != myUid.value) {
-        var targetDoc = waitingUsers.docs.first;
+      bool matchFound = false;
+
+      // লুপ চালিয়ে একজন সেফ (আনব্লকড) ইউজার বের করা
+      for (var targetDoc in waitingUsers.docs) {
         String targetUid = targetDoc.id;
 
-        String uniqueCallId = '${targetUid}_${myUid.value}';
+        // নিজেকে নিজের সাথে কানেক্ট করা বন্ধ
+        if (targetUid == myUid.value) continue;
 
-        await _db.collection('searching_users').doc(targetUid).update({
-          'matchedWith': myUid.value,
-          'callId': uniqueCallId,
-        });
+        // 🔥 কানেক্ট করার আগে ব্লক লিস্ট চেক করা হচ্ছে!
+        bool isSafeToMatch = await canMatchWith(targetUid);
 
-        // ফায়ারবেসে চ্যাট রুম বানাচ্ছে, কিন্তু ইউজারকে বসিয়ে রাখবে না
-        Future.microtask(() => _createChatRoomSafe(targetUid));
+        if (isSafeToMatch) {
+          matchFound = true;
+          String uniqueCallId = '${targetUid}_${myUid.value}';
 
-        isSearching.value = false;
-        Get.to(() => CallView(callId: uniqueCallId, userId: myUid.value, userName: myName.value));
+          await _db.collection('searching_users').doc(targetUid).update({
+            'matchedWith': myUid.value,
+            'callId': uniqueCallId,
+          });
 
-      } else {
+          // ফায়ারবেসে চ্যাট রুম বানাচ্ছে ব্যাকগ্রাউন্ডে
+          Future.microtask(() => _createChatRoomSafe(targetUid));
+
+          isSearching.value = false;
+          Get.to(() => CallView(callId: uniqueCallId, userId: myUid.value, userName: myName.value));
+
+          break; // সেফ ইউজার পেলেই লুপ বন্ধ হয়ে যাবে
+        }
+      }
+
+      // যদি সেফ কোনো ইউজার না পাওয়া যায়, তবে নিজেকে সার্চিং পুলে অ্যাড করবে
+      if (!matchFound) {
         await _db.collection('searching_users').doc(myUid.value).set({
           'uid': myUid.value,
           'matchedWith': null,

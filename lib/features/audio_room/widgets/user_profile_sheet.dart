@@ -3,6 +3,8 @@ import 'package:get/get.dart';
 import 'package:zego_uikit/zego_uikit.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+// 🔥 Safety Controller ইমপোর্ট করা হলো
+import '../../../core/controllers/safety_controller.dart';
 // 🔥 UserProfileView ইমপোর্ট করা হলো
 import '../../profile/view/user_profile_view.dart';
 
@@ -14,6 +16,9 @@ class UserProfileSheet {
     required String roomId,
     required String currentUserId,
   }) {
+    // 🔥 Safety Controller ইনিশিয়ালাইজ করা হলো
+    final SafetyController safetyController = Get.put(SafetyController());
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -73,7 +78,7 @@ class UserProfileSheet {
               ),
               const SizedBox(height: 20),
 
-              // 🔥 View Full Profile Button যুক্ত করা হলো
+              // 🔥 View Full Profile Button
               ElevatedButton(
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.purpleAccent,
@@ -83,8 +88,7 @@ class UserProfileSheet {
                   minimumSize: const Size(double.infinity, 50),
                 ),
                 onPressed: () {
-                  Get.back(); // বটম শিট ক্লোজ করবে
-                  // সরাসরি ইউজারের ফুল প্রোফাইল ভিউতে নিয়ে যাবে
+                  Get.back();
                   Get.to(() => UserProfileView(
                     userId: clickedUser.id,
                     userName: clickedUser.name,
@@ -101,7 +105,7 @@ class UserProfileSheet {
               ),
               const SizedBox(height: 25),
 
-              // 🔥 রিয়েল এডমিন অ্যাকশন (Host এর জন্য)
+              // 🔥 Host Actions (Kick/Ban)
               if (isHost) ...[
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -126,7 +130,6 @@ class UserProfileSheet {
                       Icons.block,
                       Colors.redAccent,
                           () async {
-                        // ১. ডেটাবেসে ব্যান লিস্টে এড করা
                         await FirebaseFirestore.instance
                             .collection('banned_users')
                             .doc(roomId)
@@ -136,7 +139,7 @@ class UserProfileSheet {
                           'banned_at': FieldValue.serverTimestamp(),
                           'banned_by': currentUserId,
                         });
-                        // ২. রুম থেকে রিয়েল টাইমে বের করে দেওয়া
+
                         ZegoUIKit().removeUserFromRoom([clickedUser.id]);
                         Get.back();
                         Get.snackbar(
@@ -150,7 +153,7 @@ class UserProfileSheet {
                   ],
                 ),
               ] else ...[
-                // সাধারণ ইউজারদের জন্য Block এবং Report
+                // 🔥 Standard User Actions (Block/Report via SafetyController)
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
@@ -158,42 +161,18 @@ class UserProfileSheet {
                       'Block User',
                       Icons.person_off,
                       Colors.grey,
-                          () async {
-                        await FirebaseFirestore.instance
-                            .collection('blocked_users')
-                            .doc(currentUserId)
-                            .collection('blocked')
-                            .doc(clickedUser.id)
-                            .set({'blocked_at': FieldValue.serverTimestamp()});
-                        Get.back();
-                        Get.snackbar(
-                          'Blocked',
-                          'You will no longer see interactions from this user.',
-                          backgroundColor: Colors.grey[800],
-                          colorText: Colors.white,
-                        );
+                          () {
+                        // গ্লোবাল স্কিমা ব্যবহার করে ব্লক
+                        safetyController.blockUser(clickedUser.id);
                       },
                     ),
                     _buildActionButton(
                       'Report User',
                       Icons.report_problem,
                       Colors.orangeAccent,
-                          () async {
-                        await FirebaseFirestore.instance
-                            .collection('reports_users')
-                            .add({
-                          'reported_user_id': clickedUser.id,
-                          'reported_by': currentUserId,
-                          'room_id': roomId,
-                          'timestamp': FieldValue.serverTimestamp(),
-                        });
-                        Get.back();
-                        Get.snackbar(
-                          'Reported',
-                          'User reported successfully.',
-                          backgroundColor: Colors.orangeAccent,
-                          colorText: Colors.white,
-                        );
+                          () {
+                        // স্ট্যান্ডার্ড স্কিমার জন্য প্রপার রিপোর্ট ডায়ালগ কল
+                        _showReportDialog(context, clickedUser, roomId, safetyController);
                       },
                     ),
                   ],
@@ -233,6 +212,68 @@ class UserProfileSheet {
           ],
         ),
       ),
+    );
+  }
+
+  // 📝 Standard Schema Report Dialog
+  static void _showReportDialog(BuildContext context, ZegoUIKitUser clickedUser, String roomId, SafetyController safetyController) {
+    String selectedReason = 'Spam or Scam';
+    final TextEditingController detailsController = TextEditingController();
+
+    Get.defaultDialog(
+      title: "Report User",
+      titleStyle: const TextStyle(color: Colors.orangeAccent, fontWeight: FontWeight.bold),
+      backgroundColor: const Color(0xFF1E1E1E),
+      content: StatefulBuilder(
+        builder: (context, setState) {
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              DropdownButtonFormField<String>(
+                value: selectedReason,
+                dropdownColor: const Color(0xFF2C2C2C),
+                style: const TextStyle(color: Colors.white),
+                decoration: InputDecoration(
+                  filled: true,
+                  fillColor: Colors.white.withOpacity(0.05),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                ),
+                items: ['Spam or Scam', 'Harassment or Bullying', 'Nudity or Sexual Content', 'Hate Speech']
+                    .map((reason) => DropdownMenuItem(value: reason, child: Text(reason)))
+                    .toList(),
+                onChanged: (value) => setState(() => selectedReason = value!),
+              ),
+              const SizedBox(height: 15),
+              TextField(
+                controller: detailsController,
+                style: const TextStyle(color: Colors.white),
+                maxLines: 3,
+                decoration: InputDecoration(
+                  hintText: 'Additional details (optional)...',
+                  hintStyle: const TextStyle(color: Colors.white38),
+                  filled: true,
+                  fillColor: Colors.white.withOpacity(0.05),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+      textConfirm: "Submit Report",
+      textCancel: "Cancel",
+      confirmTextColor: Colors.black,
+      cancelTextColor: Colors.white,
+      buttonColor: Colors.orangeAccent,
+      onConfirm: () {
+        safetyController.submitReport(
+          reportedUserId: clickedUser.id,
+          roomId: roomId,
+          reason: selectedReason,
+          details: detailsController.text,
+          source: 'audio_room', // 🔥 Source explicitly tagged
+        );
+      },
     );
   }
 }

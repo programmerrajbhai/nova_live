@@ -3,6 +3,9 @@ import 'package:get/get.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+// 🔥 ফিল্টার সার্ভিসটি ইমপোর্ট করুন (যেটি আমরা আগের ধাপে বানিয়েছি)
+import '../../../core/services/content_filter_service.dart';
+
 class MessagesController extends GetxController {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   var myUid = ''.obs;
@@ -111,9 +114,31 @@ class MessagesController extends GetxController {
     String text = messageController.text.trim();
     if (text.isEmpty || myUid.value.isEmpty) return;
 
-    // 🔥 যদি কোনোভাবে ব্লক করা ইউজারকে মেসেজ দিতে চায়, তাহলে আটকে দিবে
+    // 🔥 ১. Proactive Content Moderation Check (Play Store UGC Policy)
+    // খারাপ শব্দ বা স্প্যাম লিংক থাকলে মেসেজ সেন্ড হবে না
+    final moderationResult = ContentFilterService.validate(text);
+    if (!moderationResult.isAllowed) {
+      Get.snackbar(
+        'Message Blocked 🚫',
+        moderationResult.reason,
+        backgroundColor: Colors.redAccent,
+        colorText: Colors.white,
+        snackPosition: SnackPosition.BOTTOM,
+        duration: const Duration(seconds: 4),
+      );
+      return;
+    }
+
+    // 🚫 ২. আমি তাকে ব্লক করেছি কিনা চেক করা
     if (blockedUsers.contains(targetUid)) {
-      Get.snackbar('Blocked', 'You cannot send messages to a blocked user.', backgroundColor: Colors.redAccent, colorText: Colors.white);
+      Get.snackbar('Action Denied', 'You cannot send messages to a blocked user.', backgroundColor: Colors.redAccent, colorText: Colors.white);
+      return;
+    }
+
+    // 🚫 ৩. সে আমাকে ব্লক করেছে কিনা চেক করা (Mutual Block Check)
+    bool theyBlockedMe = await _checkIfTheyBlockedMe(targetUid);
+    if (theyBlockedMe) {
+      Get.snackbar('Action Denied', 'You cannot send messages to this user right now.', backgroundColor: Colors.grey[800], colorText: Colors.white);
       return;
     }
 
@@ -128,6 +153,7 @@ class MessagesController extends GetxController {
         'senderId': myUid.value,
         'text': text,
         'timestamp': exactTime,
+        'type': 'text', // ফিউচারে ইমেজ/ভয়েস পাঠাতে সুবিধা হবে
       });
 
       DocumentReference roomRef = _db.collection('chat_rooms').doc(roomId);
@@ -144,6 +170,16 @@ class MessagesController extends GetxController {
       await batch.commit();
     } catch (e) {
       Get.snackbar('Error', 'Failed to send message: $e');
+    }
+  }
+
+  // Helper Method: সে আমাকে ব্লক করেছে কিনা চেক করার ফাংশন
+  Future<bool> _checkIfTheyBlockedMe(String targetUid) async {
+    try {
+      final doc = await _db.collection('users').doc(targetUid).collection('blocked_users').doc(myUid.value).get();
+      return doc.exists;
+    } catch (e) {
+      return false; // ইন্টারনেট ইস্যু হলে মেসেজ যেতে দেবে
     }
   }
 
