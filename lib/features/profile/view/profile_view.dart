@@ -5,6 +5,8 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/widgets/premium_background.dart';
 import '../controller/profile_controller.dart';
+import '../../wallet/controller/wallet_controller.dart'; // 🔥 Wallet Controller Added
+import '../../wallet/view/wallet_view.dart'; // 🔥 Wallet View Added
 import '../../messages/view/settings_view.dart';
 import 'edit_profile_view.dart';
 import '../../legal/view/privacy_policy_view.dart';
@@ -12,10 +14,13 @@ import '../../legal/view/privacy_policy_view.dart';
 class ProfileView extends StatelessWidget {
   final ProfileController controller = Get.put(ProfileController());
 
+  // 🔥 Wallet Controller Initialize করা হলো ব্যালেন্স দেখানোর জন্য
+  final WalletController walletController = Get.put(WalletController());
+
   ProfileView({super.key});
 
   void _openWebDeletionForm() async {
-    const url = 'https://yourdomain.com/nova-live/delete-account';
+    const url = 'https://technovasoft668.github.io/delete-account.html'; // 🔥 আপনার লাইভ লিংক
     if (await canLaunchUrl(Uri.parse(url))) {
       await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
     } else {
@@ -56,112 +61,6 @@ class ProfileView extends StatelessWidget {
         Get.back();
         controller.deleteUserAccount();
       },
-    );
-  }
-
-  // 🚀 OTHIR UI: Earn Free Coins Bottom Sheet
-  void _showEarnCoinsSheet() {
-    Get.bottomSheet(
-      Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: const Color(0xFF1A1A2E).withOpacity(0.95),
-          borderRadius: const BorderRadius.only(topLeft: Radius.circular(30), topRight: Radius.circular(30)),
-          border: Border.all(color: Colors.purpleAccent.withOpacity(0.3), width: 1.5),
-          boxShadow: [BoxShadow(color: Colors.purpleAccent.withOpacity(0.2), blurRadius: 30, offset: const Offset(0, -5))],
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(width: 50, height: 5, decoration: BoxDecoration(color: Colors.white38, borderRadius: BorderRadius.circular(10))),
-            const SizedBox(height: 20),
-            const Text('Earn Free Coins 🪙', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 10),
-            const Text('Complete tasks to get free coins for live rooms!', style: TextStyle(color: Colors.white54, fontSize: 13)),
-            const SizedBox(height: 30),
-
-            // 🎁 Daily Reward Card
-            Obx(() => Container(
-              padding: const EdgeInsets.all(15),
-              decoration: BoxDecoration(
-                color: controller.canClaimDaily.value ? Colors.green.withOpacity(0.1) : Colors.white.withOpacity(0.05),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: controller.canClaimDaily.value ? Colors.greenAccent : Colors.white10),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(color: Colors.greenAccent.withOpacity(0.2), shape: BoxShape.circle),
-                    child: const Icon(FontAwesomeIcons.gift, color: Colors.greenAccent, size: 24),
-                  ),
-                  const SizedBox(width: 15),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Daily Check-in', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-                        Text(controller.canClaimDaily.value ? 'Claim 30 coins now!' : 'Come back tomorrow', style: const TextStyle(color: Colors.white54, fontSize: 12)),
-                      ],
-                    ),
-                  ),
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: controller.canClaimDaily.value ? Colors.greenAccent : Colors.grey.withOpacity(0.3),
-                      foregroundColor: controller.canClaimDaily.value ? Colors.black : Colors.white54,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                    ),
-                    onPressed: controller.canClaimDaily.value ? () => controller.claimDailyReward() : null,
-                    child: Text(controller.canClaimDaily.value ? 'Claim' : 'Done'),
-                  )
-                ],
-              ),
-            )),
-            const SizedBox(height: 15),
-
-            // 🎮 Watch Video Ad Card
-            Obx(() => Container(
-              padding: const EdgeInsets.all(15),
-              decoration: BoxDecoration(
-                gradient: LinearGradient(colors: [Colors.purpleAccent.withOpacity(0.2), Colors.cyanAccent.withOpacity(0.1)]),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: Colors.cyanAccent.withOpacity(0.5)),
-              ),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(color: Colors.purpleAccent.withOpacity(0.2), shape: BoxShape.circle),
-                    child: const Icon(FontAwesomeIcons.play, color: Colors.cyanAccent, size: 24),
-                  ),
-                  const SizedBox(width: 15),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('Watch Video', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-                        const Text('Get 50 coins instantly', style: TextStyle(color: Colors.white54, fontSize: 12)),
-                      ],
-                    ),
-                  ),
-                  ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: controller.isAdLoaded.value ? Colors.purpleAccent : Colors.grey.withOpacity(0.3),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                    ),
-                    onPressed: controller.isAdLoaded.value ? () => controller.showRewardedAd() : null,
-                    child: controller.isAdLoading.value
-                        ? const SizedBox(height: 15, width: 15, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                        : const Text('Watch', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                  )
-                ],
-              ),
-            )),
-            const SizedBox(height: 20),
-          ],
-        ),
-      ),
-      isScrollControlled: true,
     );
   }
 
@@ -251,46 +150,46 @@ class ProfileView extends StatelessWidget {
                 ),
                 const SizedBox(height: 30),
 
-                // 🚀 ৩. Wallet Card (Updated to Reward System)
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(colors: [Colors.white.withOpacity(0.1), Colors.white.withOpacity(0.05)], begin: Alignment.topLeft, end: Alignment.bottomRight),
-                    borderRadius: BorderRadius.circular(25),
-                    border: Border.all(color: Colors.purpleAccent.withOpacity(0.4), width: 1.5),
-                    boxShadow: [BoxShadow(color: Colors.purpleAccent.withOpacity(0.15), blurRadius: 20, offset: const Offset(0, 5))],
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('My Wallet', style: TextStyle(color: Colors.grey, fontSize: 14)),
-                          const SizedBox(height: 5),
-                          Row(
-                            children: [
-                              const Icon(FontAwesomeIcons.coins, color: Colors.orangeAccent, size: 28),
-                              const SizedBox(width: 10),
-                              Text('${controller.myCoins.value}', style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold)),
-                            ],
+                // 🚀 ৩. New Wallet Card (Navigates to WalletView)
+                GestureDetector(
+                  onTap: () => Get.to(() => WalletView(), transition: Transition.downToUp),
+                  child: Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(colors: [Colors.white.withOpacity(0.1), Colors.white.withOpacity(0.05)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+                      borderRadius: BorderRadius.circular(25),
+                      border: Border.all(color: Colors.purpleAccent.withOpacity(0.4), width: 1.5),
+                      boxShadow: [BoxShadow(color: Colors.purpleAccent.withOpacity(0.15), blurRadius: 20, offset: const Offset(0, 5))],
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('My Wallet', style: TextStyle(color: Colors.grey, fontSize: 14)),
+                            const SizedBox(height: 5),
+                            Row(
+                              children: [
+                                const Icon(FontAwesomeIcons.coins, color: Colors.orangeAccent, size: 28),
+                                const SizedBox(width: 10),
+                                // 🔥 Display Real-time Coins from WalletController
+                                Text('${walletController.myCoins.value}', style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold)),
+                              ],
+                            ),
+                          ],
+                        ),
+                        Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(colors: [Colors.purpleAccent, Colors.cyanAccent]),
+                            shape: BoxShape.circle,
+                            boxShadow: [BoxShadow(color: Colors.purpleAccent.withOpacity(0.4), blurRadius: 10, offset: const Offset(0, 3))],
                           ),
-                        ],
-                      ),
-                      Container(
-                        decoration: BoxDecoration(
-                          gradient: const LinearGradient(colors: [Colors.purpleAccent, Colors.cyanAccent]),
-                          borderRadius: BorderRadius.circular(20),
-                          boxShadow: [BoxShadow(color: Colors.purpleAccent.withOpacity(0.4), blurRadius: 10, offset: const Offset(0, 3))],
-                        ),
-                        child: ElevatedButton.icon(
-                          style: ElevatedButton.styleFrom(backgroundColor: Colors.transparent, shadowColor: Colors.transparent, padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12)),
-                          onPressed: _showEarnCoinsSheet, // 🔥 ওপেন হবে Bottom Sheet
-                          icon: const Icon(FontAwesomeIcons.gift, color: Colors.white, size: 16),
-                          label: const Text('Earn Coins', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                        ),
-                      )
-                    ],
+                          child: const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white, size: 20),
+                        )
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(height: 25),
@@ -337,26 +236,18 @@ class ProfileView extends StatelessWidget {
 
   Widget _buildMenuCard(List<Widget> children) {
     return Container(
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.1)),
-      ),
+      decoration: BoxDecoration(color: Colors.white.withOpacity(0.05), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white.withOpacity(0.1))),
       child: Column(children: children),
     );
   }
 
   Widget _buildMenuItem(IconData icon, String title, Color iconColor, {required VoidCallback onTap}) {
-    return Column(
-      children: [
-        ListTile(
-          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-          leading: Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: iconColor.withOpacity(0.1), borderRadius: BorderRadius.circular(12)), child: Icon(icon, color: iconColor, size: 18)),
-          title: Text(title, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w500)),
-          trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white38, size: 14),
-          onTap: onTap,
-        ),
-      ],
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+      leading: Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: iconColor.withOpacity(0.1), borderRadius: BorderRadius.circular(12)), child: Icon(icon, color: iconColor, size: 18)),
+      title: Text(title, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w500)),
+      trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white38, size: 14),
+      onTap: onTap,
     );
   }
 }
