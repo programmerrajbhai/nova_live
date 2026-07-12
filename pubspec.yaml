@@ -42,6 +42,7 @@ dependencies:
 
 
   # 🔥 এই ৩টি লাইন নতুন করে বসাবেন
+  google_mobile_ads: ^9.0.0
   firebase_core: ^3.1.0
   firebase_auth: ^5.0.0
   cloud_firestore: ^5.0.0
@@ -61,7 +62,9 @@ dependencies:
 
 
   # monitize
-  google_mobile_ads: ^9.0.0
+
+    # login with google
+  google_sign_in: ^7.2.0
 
 dev_dependencies:
   flutter_test:

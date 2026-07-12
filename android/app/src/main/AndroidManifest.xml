@@ -20,7 +20,7 @@
 
 
     <application
-        android:label="nova_live"
+        android:label="Nova Live"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
 

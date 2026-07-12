@@ -5,7 +5,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:image_picker/image_picker.dart'; // 🔥 ইমেজ পিকার প্যাকেজ
+import 'package:image_picker/image_picker.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 import '../../main_nav/view/main_nav_view.dart';
 
 class AuthController extends GetxController {
@@ -18,7 +19,6 @@ class AuthController extends GetxController {
   var dobString = ''.obs;
   var calculatedAge = 0.obs;
 
-  // 🔥 ইমেজ পিকার এবং লোকাল ইমেজের জন্য ভেরিয়েবল
   final ImagePicker _picker = ImagePicker();
   var selectedLocalImagePath = ''.obs;
 
@@ -35,9 +35,12 @@ class AuthController extends GetxController {
     isAgreed.value = value ?? false;
   }
 
+  // ==========================================
+  // ⚡ 1. One Tap Login (Anonymous)
+  // ==========================================
   void onOneTapLoginClicked() async {
     if (!isAgreed.value) {
-      Get.snackbar('Agreement Required ⚠️', 'Please agree to the Policies to continue.', snackPosition: SnackPosition.BOTTOM, backgroundColor: Colors.redAccent, colorText: Colors.white);
+      _showAgreementWarning();
       return;
     }
 
@@ -48,18 +51,95 @@ class AuthController extends GetxController {
       isLoading.value = true;
       await prefs.setBool('isLoggedIn', true);
       isLoading.value = false;
-
       _checkPermissionsAndNavigate();
     } else {
-      nameController.clear();
-      selectedGender.value = 'Male';
-      dobString.value = '';
-      calculatedAge.value = 0;
-      selectedAvatar.value = defaultAvatars[0];
-      selectedLocalImagePath.value = ''; // ক্লিয়ার করা হলো
-
+      _resetForm();
       _showProfileSetupSheet();
     }
+  }
+
+  // ==========================================
+  // 🌐 2. Sign In With Google (v7.2.0+ Latest API)
+  // ==========================================
+  Future<void> signInWithGoogle() async {
+    if (!isAgreed.value) {
+      _showAgreementWarning();
+      return;
+    }
+
+    try {
+      isLoading.value = true;
+
+      // 🔥 ১. Google Sign-In এর নতুন 'instance' (v7.0+)
+      final GoogleSignIn googleSignIn = GoogleSignIn.instance;
+
+      // 🔥 ২. নতুন নিয়মে আগে 'initialize()' কল করতে হয়
+      await googleSignIn.initialize();
+
+      // 🔥 ৩. 'signIn()' এর বদলে এখন 'authenticate()' ব্যবহার করতে হয়
+      final GoogleSignInAccount? googleUser = await googleSignIn.authenticate();
+
+      if (googleUser == null) {
+        isLoading.value = false;
+        return; // ইউজার পপআপ কেটে দিলে
+      }
+
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+
+      // 🔥 ৪. ফায়ারবেসের জন্য এখন শুধু idToken লাগে, accessToken এর দরকার নেই
+      final OAuthCredential credential = GoogleAuthProvider.credential(
+        idToken: googleAuth.idToken,
+      );
+
+      UserCredential userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
+      String uid = userCredential.user!.uid;
+
+      DocumentSnapshot doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
+
+      if (doc.exists) {
+        // পুরানো ইউজার
+        SharedPreferences prefs = await SharedPreferences.getInstance();
+        await prefs.setBool('hasAccount', true);
+        await prefs.setBool('isLoggedIn', true);
+        await prefs.setString('uid', uid);
+        await prefs.setString('userName', doc['name'] ?? 'User');
+        await prefs.setBool('ugcAccepted', true);
+
+        isLoading.value = false;
+        _checkPermissionsAndNavigate();
+      } else {
+        // নতুন ইউজার
+        _resetForm();
+        nameController.text = userCredential.user!.displayName ?? '';
+        selectedAvatar.value = userCredential.user!.photoURL ?? defaultAvatars[0];
+
+        isLoading.value = false;
+        _showProfileSetupSheet();
+      }
+    } catch (e) {
+      isLoading.value = false;
+      Get.snackbar('Error', 'Google Sign-In failed: $e', backgroundColor: Colors.redAccent, colorText: Colors.white);
+      debugPrint("Google Auth Error: $e");
+    }
+  }
+
+  void _showAgreementWarning() {
+    Get.snackbar(
+        'Agreement Required ⚠️',
+        'You must agree to the UGC Policy, Terms, and Privacy Policy to continue.',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.redAccent,
+        colorText: Colors.white
+    );
+  }
+
+  void _resetForm() {
+    nameController.clear();
+    selectedGender.value = 'Male';
+    dobString.value = '';
+    calculatedAge.value = 0;
+    selectedAvatar.value = defaultAvatars[0];
+    selectedLocalImagePath.value = '';
   }
 
   Future<void> _pickDateOfBirth(BuildContext context) async {
@@ -99,24 +179,15 @@ class AuthController extends GetxController {
     }
   }
 
-  // ==========================================
-  // 📸 PRO-LEVEL: Gallery Permission Disclosure & Image Picker
-  // ==========================================
-
   Future<void> pickCustomAvatar() async {
-    // ১. গ্যালারি ওপেন করার আগে Play Store Policy অনুযায়ী পারমিশন ডায়ালগ দেখাবে
     bool userGaveConsent = await _showPhotoPermissionDisclosure();
 
     if (userGaveConsent) {
       try {
-        final XFile? pickedFile = await _picker.pickImage(
-          source: ImageSource.gallery,
-          imageQuality: 80,
-        );
-
+        final XFile? pickedFile = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
         if (pickedFile != null) {
           selectedLocalImagePath.value = pickedFile.path;
-          selectedAvatar.value = ''; // ডিফল্ট এভাটার ক্লিয়ার করে দিলাম
+          selectedAvatar.value = '';
         }
       } catch (e) {
         Get.snackbar('Error', 'Failed to pick image: $e', backgroundColor: Colors.redAccent, colorText: Colors.white);
@@ -126,7 +197,6 @@ class AuthController extends GetxController {
 
   Future<bool> _showPhotoPermissionDisclosure() async {
     bool consent = false;
-
     await Get.defaultDialog(
       title: "Photo Access Required",
       titleStyle: const TextStyle(color: Colors.purpleAccent, fontWeight: FontWeight.bold, fontSize: 18),
@@ -144,23 +214,13 @@ class AuthController extends GetxController {
         ],
       ),
       barrierDismissible: false,
-      cancel: TextButton(
-        onPressed: () {
-          consent = false;
-          Get.back();
-        },
-        child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
-      ),
+      cancel: TextButton(onPressed: () { consent = false; Get.back(); }, child: const Text("Cancel", style: TextStyle(color: Colors.grey))),
       confirm: ElevatedButton(
         style: ElevatedButton.styleFrom(backgroundColor: Colors.purpleAccent),
-        onPressed: () {
-          consent = true;
-          Get.back();
-        },
+        onPressed: () { consent = true; Get.back(); },
         child: const Text("Allow Access", style: TextStyle(color: Colors.white)),
       ),
     );
-
     return consent;
   }
 
@@ -181,18 +241,13 @@ class AuthController extends GetxController {
             const Text('Complete Profile', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
             const SizedBox(height: 15),
 
-            const Align(
-              alignment: Alignment.centerLeft,
-              child: Text('Choose Avatar', style: TextStyle(color: Colors.grey, fontSize: 13, fontWeight: FontWeight.bold)),
-            ),
+            const Align(alignment: Alignment.centerLeft, child: Text('Choose Avatar', style: TextStyle(color: Colors.grey, fontSize: 13, fontWeight: FontWeight.bold))),
             const SizedBox(height: 10),
 
-            // 🔥 Updated Avatar Section: Camera Icon for Gallery + Default Avatars
             SizedBox(
               height: 75,
               child: Row(
                 children: [
-                  // কাস্টম ছবি আপলোড বাটন
                   GestureDetector(
                     onTap: pickCustomAvatar,
                     child: Obx(() {
@@ -214,8 +269,6 @@ class AuthController extends GetxController {
                       );
                     }),
                   ),
-
-                  // ডিফল্ট এভাটার লিস্ট
                   Expanded(
                     child: ListView.builder(
                       scrollDirection: Axis.horizontal,
@@ -224,7 +277,7 @@ class AuthController extends GetxController {
                         return GestureDetector(
                           onTap: () {
                             selectedAvatar.value = defaultAvatars[index];
-                            selectedLocalImagePath.value = ''; // ডিফল্ট সিলেক্ট করলে লোকাল রিমুভ হবে
+                            selectedLocalImagePath.value = '';
                           },
                           child: Obx(() {
                             bool isSelected = selectedAvatar.value == defaultAvatars[index];
@@ -333,31 +386,24 @@ class AuthController extends GetxController {
   Future<void> _validateAndJoin() async {
     String name = nameController.text.trim();
 
-    if (name.isEmpty) {
-      Get.snackbar('Error', 'Nickname cannot be empty.', backgroundColor: Colors.orangeAccent, colorText: Colors.black);
-      return;
-    }
-    if (dobString.value.isEmpty) {
-      Get.snackbar('Error', 'Please select your Date of Birth.', backgroundColor: Colors.orangeAccent, colorText: Colors.black);
-      return;
-    }
-    if (calculatedAge.value < 18) {
-      Get.snackbar('Access Denied 🚫', 'You must be at least 18 years old.', snackPosition: SnackPosition.TOP, backgroundColor: Colors.redAccent, colorText: Colors.white);
-      return;
-    }
+    if (name.isEmpty) { Get.snackbar('Error', 'Nickname cannot be empty.', backgroundColor: Colors.orangeAccent, colorText: Colors.black); return; }
+    if (dobString.value.isEmpty) { Get.snackbar('Error', 'Please select your Date of Birth.', backgroundColor: Colors.orangeAccent, colorText: Colors.black); return; }
+    if (calculatedAge.value < 18) { Get.snackbar('Access Denied 🚫', 'You must be at least 18 years old.', snackPosition: SnackPosition.TOP, backgroundColor: Colors.redAccent, colorText: Colors.white); return; }
 
     isLoading.value = true;
 
     try {
-      UserCredential userCredential = await FirebaseAuth.instance.signInAnonymously();
-      String uid = userCredential.user!.uid;
+      User? currentUser = FirebaseAuth.instance.currentUser;
+      String uid;
 
-      // 💡 নোট: যদি ইউজার লোকাল ছবি (গ্যালারি থেকে) সিলেক্ট করে থাকে,
-      // তাহলে ভবিষ্যতে এখানে Firebase Storage-এ ছবি আপলোড করার লজিক বসিয়ে ছবির URL টা নিতে পারবেন।
-      // আপাতত আমি `selectedAvatar` এ লোকাল ফাইলের পাথ অথবা ডিফল্ট URL সেভ করছি।
-      String finalAvatarToSave = selectedLocalImagePath.value.isNotEmpty
-          ? selectedLocalImagePath.value
-          : selectedAvatar.value;
+      if (currentUser == null) {
+        UserCredential userCredential = await FirebaseAuth.instance.signInAnonymously();
+        uid = userCredential.user!.uid;
+      } else {
+        uid = currentUser.uid;
+      }
+
+      String finalAvatarToSave = selectedLocalImagePath.value.isNotEmpty ? selectedLocalImagePath.value : selectedAvatar.value;
 
       await FirebaseFirestore.instance.collection('users').doc(uid).set({
         'uid': uid,
@@ -368,6 +414,7 @@ class AuthController extends GetxController {
         'coins': 500,
         'totalEarnings': 0.0,
         'createdAt': FieldValue.serverTimestamp(),
+        'ugcAcceptedAt': FieldValue.serverTimestamp(),
       });
 
       SharedPreferences prefs = await SharedPreferences.getInstance();
@@ -375,9 +422,10 @@ class AuthController extends GetxController {
       await prefs.setBool('isLoggedIn', true);
       await prefs.setString('uid', uid);
       await prefs.setString('userName', name);
+      await prefs.setBool('ugcAccepted', true);
 
       isLoading.value = false;
-      Get.back();
+      Get.back(); // Close Bottom Sheet
 
       _checkPermissionsAndNavigate();
 
@@ -386,10 +434,6 @@ class AuthController extends GetxController {
       Get.snackbar('Error', 'Failed to save data: $e', backgroundColor: Colors.redAccent, colorText: Colors.white);
     }
   }
-
-  // ==========================================
-  // 🔥 Camera & Mic Permission Flow
-  // ==========================================
 
   Future<void> _checkPermissionsAndNavigate() async {
     var cameraStatus = await Permission.camera.status;
@@ -419,22 +463,10 @@ class AuthController extends GetxController {
           style: TextStyle(color: Colors.white70, height: 1.5),
         ),
         actions: [
-          TextButton(
-            onPressed: () {
-              Get.back();
-              _goToHome();
-            },
-            child: const Text('Not Now', style: TextStyle(color: Colors.grey)),
-          ),
+          TextButton(onPressed: () { Get.back(); _goToHome(); }, child: const Text('Not Now', style: TextStyle(color: Colors.grey))),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.purpleAccent,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-            onPressed: () async {
-              Get.back();
-              _requestSystemPermissions();
-            },
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.purpleAccent, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+            onPressed: () async { Get.back(); _requestSystemPermissions(); },
             child: const Text('Allow Access', style: TextStyle(color: Colors.white)),
           ),
         ],
@@ -444,11 +476,7 @@ class AuthController extends GetxController {
   }
 
   Future<void> _requestSystemPermissions() async {
-    await [
-      Permission.camera,
-      Permission.microphone,
-    ].request();
-
+    await [Permission.camera, Permission.microphone].request();
     _goToHome();
   }
 
