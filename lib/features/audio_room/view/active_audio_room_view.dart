@@ -49,7 +49,7 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
     }
 
     // 🔥 ১০০০% পারফেক্ট ব্যান প্রটেকশন:
-    // যদি ইউজার ব্যানড থাকে, তবে পেজ লোড হতেই তাকে বের করে দেওয়া হবে
+    // যদি ইউজার ব্যানড থাকে, তবে পেজ লোড হতেই তাকে বের করে দেওয়া হবে
     _banSubscription = FirebaseFirestore.instance
         .collection('banned_users')
         .doc(widget.roomId)
@@ -59,7 +59,7 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
         .listen((snapshot) {
       if (snapshot.exists) {
         ZegoUIKit().leaveRoom(); // Zego থেকে লিভ
-        Get.back(); // পেজ থেকে বের করে দেওয়া
+        Get.back(); // পেজ থেকে বের করে দেওয়া
         Get.snackbar(
           'Banned 🚫',
           'You are permanently banned from this room.',
@@ -250,7 +250,7 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
       bool isMe = user.id == safeUserId;
 
       return GestureDetector(
-        behavior: HitTestBehavior.opaque, // 🔥 অডিয়েন্সদের প্রোফাইল ক্লিকেবল না হওয়ার সমস্যাটি এটি ফিক্স করবে।
+        behavior: HitTestBehavior.opaque, // 🔥 অডিয়েন্সদের প্রোফাইল ক্লিকেবল না হওয়ার সমস্যাটি এটি ফিক্স করবে।
         onTap: () {
           UserProfileSheet.show(
             context: context,
@@ -342,11 +342,16 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
                 }
                 Navigator.pop(context);
 
-                await FirebaseFirestore.instance.collection('reports_rooms').add({
-                  'room_id': widget.roomId,
-                  'reported_by': currentUserId,
+                // 🔥 Standardized Moderation Collection
+                await FirebaseFirestore.instance.collection('reports').add({
+                  'reporterId': currentUserId,
+                  'reportedUserId': '',
+                  'roomId': widget.roomId,
                   'reason': _reportController.text.trim(),
-                  'timestamp': FieldValue.serverTimestamp(),
+                  'details': _reportController.text.trim(),
+                  'status': 'pending',
+                  'createdAt': FieldValue.serverTimestamp(),
+                  'source': 'room_report',
                 });
 
                 Get.snackbar('Reported', 'Action will be taken after review. Thank you.', backgroundColor: Colors.green.withOpacity(0.8), colorText: Colors.white);
