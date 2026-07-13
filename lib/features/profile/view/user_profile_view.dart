@@ -1,14 +1,13 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import '../../../core/controllers/safety_controller.dart';
 import '../controller/public_profile_controller.dart';
 
 class UserProfileView extends StatelessWidget {
   final String userId;
   final String userName;
-  final String? userAvatar; // ঐচ্ছিক প্যারামিটার হিসেবে রাখলাম যাতে এরর না আসে
+  final String? userAvatar;
 
   const UserProfileView({
     super.key,
@@ -20,6 +19,8 @@ class UserProfileView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final PublicProfileController controller = Get.put(PublicProfileController(targetUserId: userId));
+    // 🔥 SafetyController ইনিশিয়ালাইজ করা হলো
+    final SafetyController safetyController = Get.put(SafetyController());
 
     return Scaffold(
       backgroundColor: const Color(0xFF0F0518),
@@ -35,8 +36,7 @@ class UserProfileView extends StatelessWidget {
           IconButton(
             icon: const Icon(Icons.more_horiz, color: Colors.white),
             onPressed: () {
-              // 🔥 Play Store Policy: Report & Block Options
-              _showOptionsBottomSheet(context, userId, userName);
+              _showOptionsBottomSheet(context, userId, userName, safetyController);
             },
           )
         ],
@@ -80,7 +80,6 @@ class UserProfileView extends StatelessWidget {
                 child: Column(
                   children: [
                     const SizedBox(height: 20),
-                    // Avatar setup with glowing effect
                     Container(
                       padding: const EdgeInsets.all(4),
                       decoration: BoxDecoration(
@@ -99,7 +98,6 @@ class UserProfileView extends StatelessWidget {
                     ),
                     const SizedBox(height: 15),
 
-                    // User Name & ID
                     Text(name, style: const TextStyle(color: Colors.white, fontSize: 26, fontWeight: FontWeight.bold)),
                     const SizedBox(height: 5),
                     Container(
@@ -109,14 +107,12 @@ class UserProfileView extends StatelessWidget {
                     ),
                     const SizedBox(height: 15),
 
-                    // Bio
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 40),
                       child: Text(bio, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white54, fontSize: 14)),
                     ),
                     const SizedBox(height: 30),
 
-                    // 📊 Stats Row
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
@@ -127,11 +123,9 @@ class UserProfileView extends StatelessWidget {
                     ),
                     const SizedBox(height: 35),
 
-                    // 🔘 Action Buttons
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        // Follow / Unfollow Button
                         GestureDetector(
                           onTap: () => controller.toggleFollow(),
                           child: Container(
@@ -155,7 +149,6 @@ class UserProfileView extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(width: 15),
-                        // Message Button
                         GestureDetector(
                           onTap: () {
                             Get.snackbar('Message', 'Opening chat with $name...', backgroundColor: Colors.cyan, colorText: Colors.white);
@@ -199,7 +192,7 @@ class UserProfileView extends StatelessWidget {
   // 🔥 Google Play UGC Policy Implementation (Block & Report)
   // =======================================================
 
-  void _showOptionsBottomSheet(BuildContext context, String targetId, String targetName) {
+  void _showOptionsBottomSheet(BuildContext context, String targetId, String targetName, SafetyController safetyController) {
     showModalBottomSheet(
         context: context,
         backgroundColor: const Color(0xFF1A0B2E),
@@ -219,8 +212,8 @@ class UserProfileView extends StatelessWidget {
                   title: const Text('Report User', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600)),
                   subtitle: const Text('Report inappropriate content or behavior', style: TextStyle(color: Colors.white54, fontSize: 12)),
                   onTap: () {
-                    Get.back();
-                    _showReportDialog(context, targetId, targetName);
+                    Get.back(); // Close BottomSheet
+                    _showReportDialog(context, targetId, targetName, safetyController);
                   },
                 ),
                 const Divider(color: Colors.white10),
@@ -229,8 +222,8 @@ class UserProfileView extends StatelessWidget {
                   title: const Text('Block User', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600)),
                   subtitle: const Text('You will no longer see this user', style: TextStyle(color: Colors.white54, fontSize: 12)),
                   onTap: () {
-                    Get.back();
-                    _showBlockDialog(context, targetId, targetName);
+                    Get.back(); // Close BottomSheet
+                    _showBlockDialog(context, targetId, targetName, safetyController);
                   },
                 ),
                 const SizedBox(height: 15),
@@ -241,8 +234,8 @@ class UserProfileView extends StatelessWidget {
     );
   }
 
-  // 🚩 Report System (Required by Play Store)
-  void _showReportDialog(BuildContext context, String targetId, String targetName) {
+  // 🚩 Report System via SafetyController
+  void _showReportDialog(BuildContext context, String targetId, String targetName, SafetyController safetyController) {
     final List<String> reportReasons = [
       'Nudity or sexually explicit content',
       'Hate speech or symbols',
@@ -281,41 +274,23 @@ class UserProfileView extends StatelessWidget {
                   actions: [
                     TextButton(
                       child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
-                      // 🔥 Fix: Removed onButtonTap
                       onPressed: () => Get.back(),
                     ),
-                    ElevatedButton(
+                    Obx(() => ElevatedButton(
                       style: ElevatedButton.styleFrom(backgroundColor: Colors.pinkAccent, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-                      child: const Text('Submit Report', style: TextStyle(color: Colors.white)),
-                      onPressed: () async {
-                        Get.back(); // Close Dialog
-
-                        // ফায়ারবেসে রিপোর্ট সেভ করা
-                        SharedPreferences prefs = await SharedPreferences.getInstance();
-                        String myUid = prefs.getString('uid') ?? '';
-
-                        if (myUid.isNotEmpty) {
-                          await FirebaseFirestore.instance.collection('reports').add({
-                            'reporterId': myUid,
-                            'reportedUserId': targetId,
-                            'reason': selectedReason,
-                            'timestamp': FieldValue.serverTimestamp(),
-                            'status': 'pending'
-                          });
-
-                          // Play Store Requirement: Show confirmation that report is received
-                          Get.snackbar(
-                            'Report Submitted',
-                            'Thank you for reporting. Our team will review this user within 24 hours.',
-                            backgroundColor: Colors.black87,
-                            colorText: Colors.white,
-                            snackPosition: SnackPosition.BOTTOM,
-                            duration: const Duration(seconds: 4),
-                            icon: const Icon(Icons.check_circle, color: Colors.greenAccent),
-                          );
-                        }
+                      onPressed: safetyController.isProcessing.value ? null : () {
+                        // 🔥 Direct Firebase কল মুছে SafetyController ব্যবহার করা হলো
+                        safetyController.submitReport(
+                          reportedUserId: targetId,
+                          reason: selectedReason,
+                          details: 'Reported from User Profile View',
+                          source: 'user_profile',
+                        );
                       },
-                    ),
+                      child: safetyController.isProcessing.value
+                          ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                          : const Text('Submit Report', style: TextStyle(color: Colors.white)),
+                    )),
                   ],
                 );
               }
@@ -324,8 +299,8 @@ class UserProfileView extends StatelessWidget {
     );
   }
 
-  // 🚫 Block System (Required by Play Store)
-  void _showBlockDialog(BuildContext context, String targetId, String targetName) {
+  // 🚫 Block System via SafetyController
+  void _showBlockDialog(BuildContext context, String targetId, String targetName, SafetyController safetyController) {
     showDialog(
         context: context,
         builder: (context) {
@@ -337,39 +312,24 @@ class UserProfileView extends StatelessWidget {
             actions: [
               TextButton(
                 child: const Text('Cancel', style: TextStyle(color: Colors.white54)),
-                // 🔥 Fix: Removed onButtonTap
                 onPressed: () => Get.back(),
               ),
-              ElevatedButton(
+              Obx(() => ElevatedButton(
                 style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-                child: const Text('Block', style: TextStyle(color: Colors.white)),
-                onPressed: () async {
-                  Get.back();
+                onPressed: safetyController.isProcessing.value ? null : () async {
 
-                  SharedPreferences prefs = await SharedPreferences.getInstance();
-                  String myUid = prefs.getString('uid') ?? '';
+                  // 🔥 Direct Firebase কল মুছে SafetyController ব্যবহার করা হলো
+                  await safetyController.blockUser(targetId);
 
-                  if (myUid.isNotEmpty) {
-                    // ইউজারের ব্লক লিস্টে অ্যাড করা
-                    await FirebaseFirestore.instance.collection('users').doc(myUid).collection('blocked_users').doc(targetId).set({
-                      'blockedAt': FieldValue.serverTimestamp(),
-                      'blockedUserId': targetId,
-                      'blockedUserName': targetName,
-                    });
-
-                    Get.snackbar(
-                      'User Blocked',
-                      '$targetName has been blocked.',
-                      backgroundColor: Colors.redAccent.withOpacity(0.9),
-                      colorText: Colors.white,
-                      snackPosition: SnackPosition.BOTTOM,
-                    );
-
-                    // প্রোফাইল থেকে বের করে দেওয়া
-                    Future.delayed(const Duration(seconds: 1), () => Get.back());
-                  }
+                  // ব্লক করার পর ইউজার প্রোফাইল পেজ থেকে বের করে দেওয়া
+                  Future.delayed(const Duration(milliseconds: 500), () {
+                    Get.back();
+                  });
                 },
-              ),
+                child: safetyController.isProcessing.value
+                    ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                    : const Text('Block', style: TextStyle(color: Colors.white)),
+              )),
             ],
           );
         }
