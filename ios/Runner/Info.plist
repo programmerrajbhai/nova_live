@@ -1,6 +1,18 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
+
+
+<key>NSCameraUsageDescription</key>
+<string>Nova Live uses your camera for live video matching and live streaming features.</string>
+
+<key>NSMicrophoneUsageDescription</key>
+<string>Nova Live uses your microphone for live audio rooms and video calls.</string>
+
+<key>NSPhotoLibraryUsageDescription</key>
+<string>Nova Live uses your photo library so you can choose profile photos or room logos.</string>
+
+
 <dict>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>

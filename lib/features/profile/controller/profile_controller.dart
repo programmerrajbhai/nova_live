@@ -110,69 +110,119 @@ class ProfileController extends GetxController {
 
     isProcessing.value = true;
 
-    // ইউজারকে জানিয়ে দেওয়া যে ব্যাকএন্ডে কাজ চলছে
     Get.snackbar(
       'Processing...',
-      'Permanently deleting your account and data. Please wait.',
+      'Permanently deleting your account and data. This may take a moment.',
       backgroundColor: Colors.orange,
       colorText: Colors.white,
-      duration: const Duration(seconds: 5),
+      duration: const Duration(seconds: 8),
     );
 
     try {
-      WriteBatch batch = _db.batch(); // ব্যাচ রাইট (একসাথে একাধিক ডিলিট করার জন্য)
+      WriteBatch batch = _db.batch();
+      int operationCount = 0;
+
+      // 🔥 Batch Limit Handler (প্রতি ৪৫০ টি অপারেশনে একবার ফায়ারবেসে কমিট করবে)
+      Future<void> commitBatchIfNeeded() async {
+        if (operationCount >= 450) {
+          await batch.commit();
+          batch = _db.batch(); // নতুন ব্যাচ শুরু
+          operationCount = 0;
+        }
+      }
 
       // 🧹 ১. Matchmaking/Searching Data ডিলিট
       DocumentReference searchRef = _db.collection('searching_users').doc(uid);
       batch.delete(searchRef);
+      operationCount++;
+      await commitBatchIfNeeded();
 
       // 🧹 ২. Blocked Users Subcollection ডিলিট
       QuerySnapshot blockedDocs = await _db.collection('users').doc(uid).collection('blocked_users').get();
       for (var doc in blockedDocs.docs) {
         batch.delete(doc.reference);
+        operationCount++;
+        await commitBatchIfNeeded();
       }
 
-      // 🧹 ৩. Reports Anonymization (রিপোর্ট ডিলিট করা যাবে না, শুধু নাম/ID মুছে দেওয়া হবে)
+      // 🧹 ৩. Reports Anonymization
       QuerySnapshot reportsGiven = await _db.collection('reports').where('reporterId', isEqualTo: uid).get();
       for (var doc in reportsGiven.docs) {
         batch.update(doc.reference, {'reporterId': 'deleted_user'});
+        operationCount++;
+        await commitBatchIfNeeded();
       }
       QuerySnapshot reportsReceived = await _db.collection('reports').where('reportedUserId', isEqualTo: uid).get();
       for (var doc in reportsReceived.docs) {
         batch.update(doc.reference, {'reportedUserId': 'deleted_user'});
+        operationCount++;
+        await commitBatchIfNeeded();
       }
 
-      // 🧹 ৪. Chat Rooms Delete (যেসব চ্যাটে সে ছিল)
+      // 🧹 ৪. Followers/Following Cleanup (অন্যদের লিস্ট থেকে এই আইডি রিমুভ)
+      QuerySnapshot followingMe = await _db.collection('users').where('followers', arrayContains: uid).get();
+      for (var doc in followingMe.docs) {
+        batch.update(doc.reference, {'followers': FieldValue.arrayRemove([uid])});
+        operationCount++;
+        await commitBatchIfNeeded();
+      }
+      QuerySnapshot followedByMe = await _db.collection('users').where('following', arrayContains: uid).get();
+      for (var doc in followedByMe.docs) {
+        batch.update(doc.reference, {'following': FieldValue.arrayRemove([uid])});
+        operationCount++;
+        await commitBatchIfNeeded();
+      }
+
+      // 🧹 ৫. Chat Rooms & Messages Cleanup (Orphan Data রিমুভ)
       QuerySnapshot chats = await _db.collection('chat_rooms').where('participants', arrayContains: uid).get();
-      for (var doc in chats.docs) {
-        batch.delete(doc.reference);
+      for (var roomDoc in chats.docs) {
+        // আগে চ্যাট রুমের ভেতরের সব মেসেজ সাব-কালেকশন ডিলিট করতে হবে
+        QuerySnapshot messages = await roomDoc.reference.collection('messages').get();
+        for (var msgDoc in messages.docs) {
+          batch.delete(msgDoc.reference);
+          operationCount++;
+          await commitBatchIfNeeded();
+        }
+        // এরপর মেইন চ্যাট রুম ডিলিট
+        batch.delete(roomDoc.reference);
+        operationCount++;
+        await commitBatchIfNeeded();
       }
 
-      // 🧹 ৫. Firebase Storage Cleanup (Upload করা ছবি ডিলিট)
+      // 🧹 ৬. Firebase Storage Cleanup (Exact URL & Folder)
       try {
+        // যদি ইউজারের প্রোফাইল পিকচার ফায়ারবেস স্টোরেজের হয়, তবে সরাসরি সেই লিংকের ছবিটা আগে ডিলিট করবে
+        if (userAvatar.value.isNotEmpty && userAvatar.value.contains('firebasestorage.googleapis.com')) {
+          final exactImageRef = FirebaseStorage.instance.refFromURL(userAvatar.value);
+          await exactImageRef.delete();
+        }
+        // এরপর ইউজারের ফোল্ডারে থাকা বাকি সব মুছে ফেলবে
         final storageRef = FirebaseStorage.instance.ref().child('uploads/$uid');
         final listResult = await storageRef.listAll();
         for (var item in listResult.items) {
-          await item.delete(); // ইউজারের আপলোড করা সব ফাইল মুছে ফেলা হবে
+          await item.delete();
         }
       } catch (e) {
         debugPrint('Storage Cleanup skipped (No files found or no permission).');
       }
 
-      // 🧹 ৬. Main User Document Delete
+      // 🧹 ৭. Main User Document Delete
       DocumentReference userRef = _db.collection('users').doc(uid);
       batch.delete(userRef);
+      operationCount++;
 
-      // 🔥 ব্যাচ এক্সিকিউট করা (সব ডাটা এক ক্লিকে উধাও)
-      await batch.commit();
+      // 🔥 ফাইনাল ব্যাচ কমিট (বাকি থাকা অপারেশনগুলো রান করবে)
+      if (operationCount > 0) {
+        await batch.commit();
+      }
 
-      // 🧹 ৭. Firebase Authentication Delete
+      // 🧹 ৮. Firebase Authentication Delete
       User? currentUser = _auth.currentUser;
       if (currentUser != null) {
         await currentUser.delete();
       }
 
-      // 🧹 ৮. Local App Data Cleanup
+      // 🧹 ৯. Local App Data Cleanup
       SharedPreferences prefs = await SharedPreferences.getInstance();
       await prefs.clear();
 
@@ -186,14 +236,13 @@ class ProfileController extends GetxController {
 
     } on FirebaseAuthException catch (e) {
       if (e.code == 'requires-recent-login') {
-        // সিকিউরিটির জন্য অনেকক্ষণ লগিন থাকলে ফায়ারবেস পাসওয়ার্ড বা রি-লগিন চায়
         Get.snackbar('Security Alert', 'Please log out, log in again, and retry deleting your account.', backgroundColor: Colors.redAccent, colorText: Colors.white, duration: const Duration(seconds: 6));
       } else {
         Get.snackbar('Error', 'Auth Error: ${e.message}', backgroundColor: Colors.redAccent, colorText: Colors.white);
       }
     } catch (e) {
       debugPrint("Full Deletion Error: $e");
-      Get.snackbar('Error', 'Failed to complete full deletion. Please use our web form.', backgroundColor: Colors.redAccent, colorText: Colors.white);
+      Get.snackbar('Error', 'Failed to complete full deletion. Please try again.', backgroundColor: Colors.redAccent, colorText: Colors.white);
     } finally {
       isProcessing.value = false;
     }

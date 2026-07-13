@@ -5,11 +5,10 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/widgets/premium_background.dart';
 import '../controller/profile_controller.dart';
-import '../../wallet/controller/wallet_controller.dart'; // 🔥 Wallet Controller Added
-import '../../wallet/view/wallet_view.dart'; // 🔥 Wallet View Added
+import '../../wallet/controller/wallet_controller.dart';
+import '../../wallet/view/wallet_view.dart';
 import '../../messages/view/settings_view.dart';
 import 'edit_profile_view.dart';
-import '../../legal/view/privacy_policy_view.dart';
 
 class ProfileView extends StatelessWidget {
   final ProfileController controller = Get.put(ProfileController());
@@ -18,6 +17,16 @@ class ProfileView extends StatelessWidget {
   final WalletController walletController = Get.put(WalletController());
 
   ProfileView({super.key});
+
+  // 🔥 নতুন: Privacy Policy ওয়েব লিংক ওপেন করার ফাংশন
+  void _openPrivacyPolicy() async {
+    const url = 'https://technovasoft668.github.io/privacy-policy.html';
+    if (await canLaunchUrl(Uri.parse(url))) {
+      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+    } else {
+      Get.snackbar('Error', 'Could not open Privacy Policy.', backgroundColor: Colors.redAccent, colorText: Colors.white);
+    }
+  }
 
   void _openWebDeletionForm() async {
     const url = 'https://technovasoft668.github.io/delete-account.html'; // 🔥 আপনার লাইভ লিংক
@@ -197,7 +206,8 @@ class ProfileView extends StatelessWidget {
                 // ৪. Legal & Safety
                 _buildMenuCard([
                   _buildMenuItem(FontAwesomeIcons.userShield, 'Privacy & Safety', Colors.indigoAccent, onTap: () => Get.to(() => SettingsView(), transition: Transition.rightToLeftWithFade)),
-                  _buildMenuItem(FontAwesomeIcons.fileContract, 'Terms & Privacy Policy', Colors.cyanAccent, onTap: () => Get.to(() => const PrivacyPolicyView(), transition: Transition.rightToLeftWithFade)),
+                  // 🔥 আপডেট করা হয়েছে: ইন-অ্যাপের বদলে সরাসরি গিটহাবের পেজ ওপেন হবে
+                  _buildMenuItem(FontAwesomeIcons.fileContract, 'Terms & Privacy Policy', Colors.cyanAccent, onTap: _openPrivacyPolicy),
                 ]),
                 const SizedBox(height: 20),
 
