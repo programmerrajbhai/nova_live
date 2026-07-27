@@ -1,10 +1,8 @@
 import 'dart:io';
 import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:nova_live/core/widgets/premium_background.dart';
-
+import '../../../core/widgets/premium_background.dart';
 import '../controller/audio_room_controller.dart';
 import '../model/audio_room_model.dart';
 
@@ -37,10 +35,8 @@ class AudioRoomView extends StatelessWidget {
                 style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w900),
               ),
               const SizedBox(height: 16),
-
               Obx(() {
                 final path = controller.pickedLogoPath.value;
-
                 return GestureDetector(
                   onTap: controller.pickRoomLogo,
                   child: Container(
@@ -61,22 +57,18 @@ class AudioRoomView extends StatelessWidget {
                   ),
                 );
               }),
-
               const SizedBox(height: 10),
-
               Text(
                 'Tap to choose room logo',
                 style: TextStyle(color: Colors.white.withOpacity(0.50), fontSize: 12),
               ),
-
               const SizedBox(height: 18),
-
               TextField(
                 controller: roomNameController,
                 style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
                 cursorColor: pink,
                 decoration: InputDecoration(
-                  hintText: "E.g. Midnight Chill Adda 🎵",
+                  hintText: "E.g. Midnight Chill Adda 🌙",
                   hintStyle: TextStyle(color: Colors.white.withOpacity(0.30)),
                   prefixIcon: const Icon(Icons.graphic_eq_rounded, color: pink),
                   filled: true,
@@ -87,9 +79,7 @@ class AudioRoomView extends StatelessWidget {
                   ),
                 ),
               ),
-
               const SizedBox(height: 20),
-
               Row(
                 children: [
                   Expanded(
@@ -142,7 +132,6 @@ class AudioRoomView extends StatelessWidget {
                 ],
               ),
             ),
-
             Padding(
               padding: const EdgeInsets.fromLTRB(18, 8, 18, 14),
               child: GlassBox(
@@ -169,7 +158,6 @@ class AudioRoomView extends StatelessWidget {
                 ),
               ),
             ),
-
             Expanded(
               child: StreamBuilder<List<AudioRoomModel>>(
                 stream: controller.getLiveRoomsStream(),
@@ -177,7 +165,6 @@ class AudioRoomView extends StatelessWidget {
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return const Center(child: CircularProgressIndicator(color: pink));
                   }
-
                   if (!snapshot.hasData || snapshot.data!.isEmpty) {
                     return EmptyRooms(onCreate: () => _showCreateRoomDialog(context));
                   }
@@ -189,11 +176,7 @@ class AudioRoomView extends StatelessWidget {
                     itemCount: rooms.length,
                     itemBuilder: (_, index) => RoomCard(
                       room: rooms[index],
-                      onTap: () => controller.joinRoom(
-                        rooms[index].roomId,
-                        rooms[index].roomName,
-                        rooms[index].roomLogo,
-                      ),
+                      onTap: () => controller.joinRoom(rooms[index]), // 👈 এখানেই ফিক্স করা হয়েছে
                     ),
                   );
                 },
@@ -221,21 +204,37 @@ class RoomCard extends StatelessWidget {
         padding: const EdgeInsets.all(14),
         child: Row(
           children: [
-            CircleAvatarPremium(image: room.roomLogo),
+            // যদি অফিসিয়াল রুম হয় তবে স্পেশাল বর্ডার দেখাবে
+            Container(
+              padding: const EdgeInsets.all(2),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: room.isOfficial ? Colors.amber : Colors.transparent, width: 2),
+              ),
+              child: CircleAvatarPremium(image: room.roomLogo),
+            ),
             const SizedBox(width: 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    room.roomName,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w900),
+                  Row(
+                    children: [
+                      if (room.isOfficial) const Icon(Icons.verified, color: Colors.amber, size: 16),
+                      if (room.isOfficial) const SizedBox(width: 5),
+                      Expanded(
+                        child: Text(
+                          room.roomName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(color: room.isOfficial ? Colors.amber : Colors.white, fontSize: 17, fontWeight: FontWeight.w900),
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 5),
                   Text(
-                    'Host: ${room.hostName}',
+                    room.isOfficial ? '👑 Official Event' : 'Host: ${room.hostName}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     style: TextStyle(color: Colors.white.withOpacity(0.48), fontSize: 13),

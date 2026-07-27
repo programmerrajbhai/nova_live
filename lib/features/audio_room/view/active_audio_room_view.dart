@@ -12,21 +12,29 @@ import '../widgets/user_profile_sheet.dart';
 class ActiveAudioRoomView extends StatefulWidget {
   final String roomId;
   final String roomName;
-  final String roomLogo; // 🔥 নতুন: রুম লোগো
+  final String roomLogo;
   final bool isHost;
   final String userId;
   final String userName;
   final String userAvatar;
 
+  // অ্যাডমিন কন্ট্রোলড প্রপার্টিজ
+  final bool isOfficial;
+  final String bgImage;
+  final String bgMusic;
+
   const ActiveAudioRoomView({
     Key? key,
     required this.roomId,
     required this.roomName,
-    required this.roomLogo, // 🔥 কনস্ট্রাক্টরে রিসিভ করা হলো
+    required this.roomLogo,
     required this.isHost,
     required this.userId,
     required this.userName,
     required this.userAvatar,
+    this.isOfficial = false,
+    this.bgImage = '',
+    this.bgMusic = '',
   }) : super(key: key);
 
   @override
@@ -48,8 +56,7 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
       safeUserId = "user_${DateTime.now().millisecondsSinceEpoch}";
     }
 
-    // 🔥 ১০০০% পারফেক্ট ব্যান প্রটেকশন:
-    // যদি ইউজার ব্যানড থাকে, তবে পেজ লোড হতেই তাকে বের করে দেওয়া হবে
+    // ব্যান চেকিং লজিক
     _banSubscription = FirebaseFirestore.instance
         .collection('banned_users')
         .doc(widget.roomId)
@@ -58,8 +65,8 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
         .snapshots()
         .listen((snapshot) {
       if (snapshot.exists) {
-        ZegoUIKit().leaveRoom(); // Zego থেকে লিভ
-        Get.back(); // পেজ থেকে বের করে দেওয়া
+        ZegoUIKit().leaveRoom();
+        Get.back();
         Get.snackbar(
           'Banned 🚫',
           'You are permanently banned from this room.',
@@ -73,9 +80,9 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
 
   @override
   void dispose() {
-    _banSubscription.cancel(); // লিসেনার ক্লোজ করা হলো
+    _banSubscription.cancel();
     _reportController.dispose();
-    if (widget.isHost) {
+    if (widget.isHost && !widget.isOfficial) {
       FirebaseFirestore.instance.collection('live_audio_rooms').doc(widget.roomId).delete();
     }
     super.dispose();
@@ -87,7 +94,20 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
         ? ZegoUIKitPrebuiltLiveAudioRoomConfig.host()
         : ZegoUIKitPrebuiltLiveAudioRoomConfig.audience();
 
-    config.background = Stack(
+    // ==========================================
+    // কাস্টম ব্যাকগ্রাউন্ড (Official vs Regular)
+    // ==========================================
+    config.background = widget.isOfficial && widget.bgImage.isNotEmpty
+        ? Container(
+      decoration: BoxDecoration(
+        image: DecorationImage(
+          image: NetworkImage(widget.bgImage),
+          fit: BoxFit.cover,
+          colorFilter: ColorFilter.mode(Colors.black.withOpacity(0.65), BlendMode.darken),
+        ),
+      ),
+    )
+        : Stack(
       children: [
         Container(
           decoration: const BoxDecoration(
@@ -99,21 +119,17 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
           ),
         ),
         Positioned(
-          top: -50,
-          left: -50,
+          top: -50, left: -50,
           child: Container(
-            width: 200,
-            height: 200,
+            width: 200, height: 200,
             decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.pinkAccent.withOpacity(0.15)),
             child: BackdropFilter(filter: ImageFilter.blur(sigmaX: 50, sigmaY: 50), child: Container(color: Colors.transparent)),
           ),
         ),
         Positioned(
-          bottom: 100,
-          right: -50,
+          bottom: 100, right: -50,
           child: Container(
-            width: 250,
-            height: 250,
+            width: 250, height: 250,
             decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.cyanAccent.withOpacity(0.1)),
             child: BackdropFilter(filter: ImageFilter.blur(sigmaX: 50, sigmaY: 50), child: Container(color: Colors.transparent)),
           ),
@@ -139,23 +155,18 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
                       child: Container(
                         padding: const EdgeInsets.all(6),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.1),
+                          color: Colors.black.withOpacity(0.3), // আরও ডার্ক করা হয়েছে
                           borderRadius: BorderRadius.circular(30),
-                          border: Border.all(color: Colors.white.withOpacity(0.2), width: 1),
+                          border: Border.all(color: widget.isOfficial ? Colors.amber.withOpacity(0.5) : Colors.white.withOpacity(0.2), width: 1.5),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            // 🔥 রুম লোগো দেখানো হচ্ছে
                             CircleAvatar(
                               radius: 20,
                               backgroundColor: Colors.grey[800],
-                              backgroundImage: widget.roomLogo.isNotEmpty
-                                  ? NetworkImage(widget.roomLogo)
-                                  : null,
-                              child: widget.roomLogo.isEmpty
-                                  ? const Icon(Icons.meeting_room, color: Colors.white)
-                                  : null,
+                              backgroundImage: widget.roomLogo.isNotEmpty ? NetworkImage(widget.roomLogo) : null,
+                              child: widget.roomLogo.isEmpty ? const Icon(Icons.meeting_room, color: Colors.white) : null,
                             ),
                             const SizedBox(width: 10),
                             Expanded(
@@ -163,17 +174,25 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Text(
-                                    widget.roomName.isEmpty ? "Live Room" : widget.roomName,
-                                    style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
+                                  Row(
+                                    children: [
+                                      if (widget.isOfficial)
+                                        const Icon(Icons.verified, color: Colors.amber, size: 14),
+                                      if (widget.isOfficial)
+                                        const SizedBox(width: 4),
+                                      Expanded(
+                                        child: Text(
+                                          widget.roomName.isEmpty ? "Live Room" : widget.roomName,
+                                          style: TextStyle(color: widget.isOfficial ? Colors.amber : Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                                          maxLines: 1, overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
                                   ),
                                   Text(
                                     "ID: ${widget.roomId.replaceAll('room_', '')}",
                                     style: const TextStyle(color: Colors.white70, fontSize: 11),
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
+                                    maxLines: 1, overflow: TextOverflow.ellipsis,
                                   ),
                                 ],
                               ),
@@ -182,7 +201,7 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                               decoration: BoxDecoration(
-                                gradient: const LinearGradient(colors: [Colors.pinkAccent, Colors.deepPurpleAccent]),
+                                gradient: LinearGradient(colors: widget.isOfficial ? [Colors.amber, Colors.orange] : [Colors.pinkAccent, Colors.deepPurpleAccent]),
                                 borderRadius: BorderRadius.circular(20),
                               ),
                               child: const Text("Follow", style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
@@ -221,11 +240,35 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
                         ],
                       ),
                     ),
-                    const SizedBox(width: 45),
+                    const SizedBox(width: 45), // Zego-এর ক্লোজ বাটনের জন্য স্পেস
                   ],
                 ),
               ],
             ),
+
+            // ==========================================
+            // অফিসিয়াল ব্যাকগ্রাউন্ড মিউজিক ইউআই ইন্ডিকেটর
+            // ==========================================
+            if (widget.isOfficial && widget.bgMusic.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 15.0),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: Colors.black45,
+                    borderRadius: BorderRadius.circular(15),
+                    border: Border.all(color: Colors.amber.withOpacity(0.5)),
+                  ),
+                  child: const Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.music_note_rounded, color: Colors.amber, size: 16),
+                      SizedBox(width: 6),
+                      Text("Official Event BGM Playing", style: TextStyle(color: Colors.amber, fontSize: 11, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ),
+              )
           ],
         ),
       ),
@@ -245,12 +288,11 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
 
     config.seat.avatarBuilder = (BuildContext context, Size size, ZegoUIKitUser? user, Map<String, dynamic> extraInfo) {
       if (user == null || user.name.isEmpty) return const SizedBox();
-
       String firstLetter = user.name.trim().substring(0, 1).toUpperCase();
       bool isMe = user.id == safeUserId;
 
       return GestureDetector(
-        behavior: HitTestBehavior.opaque, // 🔥 অডিয়েন্সদের প্রোফাইল ক্লিকেবল না হওয়ার সমস্যাটি এটি ফিক্স করবে।
+        behavior: HitTestBehavior.opaque,
         onTap: () {
           UserProfileSheet.show(
             context: context,
@@ -263,9 +305,9 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
         child: Container(
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            border: Border.all(color: isMe ? Colors.cyanAccent : Colors.pinkAccent.withOpacity(0.6), width: 2.5),
+            border: Border.all(color: isMe ? Colors.cyanAccent : (widget.isOfficial ? Colors.amber : Colors.pinkAccent).withOpacity(0.6), width: 2.5),
             boxShadow: [
-              BoxShadow(color: (isMe ? Colors.cyanAccent : Colors.pinkAccent).withOpacity(0.4), blurRadius: 10, spreadRadius: 1)
+              BoxShadow(color: (isMe ? Colors.cyanAccent : (widget.isOfficial ? Colors.amber : Colors.pinkAccent)).withOpacity(0.4), blurRadius: 10, spreadRadius: 1)
             ],
           ),
           child: CircleAvatar(
@@ -341,8 +383,6 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
                   return;
                 }
                 Navigator.pop(context);
-
-                // 🔥 Standardized Moderation Collection
                 await FirebaseFirestore.instance.collection('reports').add({
                   'reporterId': currentUserId,
                   'reportedUserId': '',
@@ -353,7 +393,6 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
                   'createdAt': FieldValue.serverTimestamp(),
                   'source': 'room_report',
                 });
-
                 Get.snackbar('Reported', 'Action will be taken after review. Thank you.', backgroundColor: Colors.green.withOpacity(0.8), colorText: Colors.white);
               },
               child: const Text("Submit", style: TextStyle(color: Colors.white)),

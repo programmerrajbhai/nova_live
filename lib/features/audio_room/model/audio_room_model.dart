@@ -8,6 +8,11 @@ class AudioRoomModel {
   final String roomName;
   final String roomLogo;
 
+  // অ্যাডমিন কন্ট্রোলড স্পেশাল ফিচার
+  final bool isOfficial;
+  final String bgImage;
+  final String bgMusic;
+
   AudioRoomModel({
     required this.roomId,
     required this.hostId,
@@ -15,18 +20,23 @@ class AudioRoomModel {
     required this.hostAvatar,
     required this.roomName,
     required this.roomLogo,
+    this.isOfficial = false,
+    this.bgImage = '',
+    this.bgMusic = '',
   });
 
   factory AudioRoomModel.fromDocument(DocumentSnapshot doc) {
-    final data = doc.data() as Map<String, dynamic>;
-
+    final data = doc.data() as Map<String, dynamic>? ?? {};
     return AudioRoomModel(
-      roomId: data['roomId'] ?? '',
+      roomId: doc.id,
       hostId: data['hostId'] ?? '',
       hostName: data['hostName'] ?? 'Nova User',
       hostAvatar: data['hostAvatar'] ?? '',
       roomName: data['roomName'] ?? 'Nova Live Room',
       roomLogo: data['roomLogo'] ?? data['hostAvatar'] ?? '',
+      isOfficial: data['isOfficial'] ?? false,
+      bgImage: data['bgImage'] ?? '',
+      bgMusic: data['bgMusic'] ?? '',
     );
   }
 
@@ -38,6 +48,9 @@ class AudioRoomModel {
       'hostAvatar': hostAvatar,
       'roomName': roomName,
       'roomLogo': roomLogo,
+      'isOfficial': isOfficial,
+      'bgImage': bgImage,
+      'bgMusic': bgMusic,
       'createdAt': FieldValue.serverTimestamp(),
     };
   }

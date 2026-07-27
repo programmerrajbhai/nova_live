@@ -145,9 +145,21 @@ class SettingsView extends StatelessWidget {
           stream: controller.getReportedUsers(),
           builder: (context, snapshot) {
 
-            // 🔥 Error Handling
+
+
+            // Error Handling
             if (snapshot.hasError) {
-              return const Center(child: Text("Something went wrong!", style: TextStyle(color: Colors.redAccent)));
+              debugPrint("Reports Stream Error: ${snapshot.error}");
+              return Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(20.0),
+                  child: Text(
+                    "Firestore Error:\n${snapshot.error}",
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.redAccent, fontSize: 14),
+                  ),
+                ),
+              );
             }
 
             // 🔥 Waiting State Check (অসীম লোডিং বন্ধ করার জন্য)
