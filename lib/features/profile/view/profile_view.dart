@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:cloud_firestore/cloud_firestore.dart'; // ফায়ারবেস থেকে লিংক আনার জন্য যুক্ত করা হলো
 
 import '../../../core/widgets/premium_background.dart';
 import '../controller/profile_controller.dart';
@@ -13,27 +14,69 @@ import 'edit_profile_view.dart';
 class ProfileView extends StatelessWidget {
   final ProfileController controller = Get.put(ProfileController());
 
-  // 🔥 Wallet Controller Initialize করা হলো ব্যালেন্স দেখানোর জন্য
+  // Wallet Controller Initialize
   final WalletController walletController = Get.put(WalletController());
 
   ProfileView({super.key});
 
-  // 🔥 নতুন: Privacy Policy ওয়েব লিংক ওপেন করার ফাংশন
+  // ==========================================
+  // ডায়নামিক Privacy Policy লিংক (Admin Sync)
+  // ==========================================
   void _openPrivacyPolicy() async {
-    const url = 'https://technovasoft668.github.io/privacy-policy.html';
-    if (await canLaunchUrl(Uri.parse(url))) {
-      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-    } else {
-      Get.snackbar('Error', 'Could not open Privacy Policy.', backgroundColor: Colors.redAccent, colorText: Colors.white);
+    Get.dialog(const Center(child: CircularProgressIndicator(color: Colors.purpleAccent)), barrierDismissible: false);
+
+    try {
+      DocumentSnapshot configDoc = await FirebaseFirestore.instance.collection('settings').doc('app_config').get();
+      if (Get.isDialogOpen ?? false) Get.back(); // লোডার অফ করা হলো
+
+      String url = 'https://technovasoft668.github.io/privacy-policy.html'; // ডিফল্ট ফলব্যাক লিংক
+
+      if (configDoc.exists && configDoc.data() != null) {
+        final data = configDoc.data() as Map<String, dynamic>;
+        if (data['privacyPolicyUrl'] != null && data['privacyPolicyUrl'].toString().isNotEmpty) {
+          url = data['privacyPolicyUrl']; // অ্যাডমিনের দেওয়া লিংক
+        }
+      }
+
+      if (await canLaunchUrl(Uri.parse(url))) {
+        await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+      } else {
+        Get.snackbar('Error', 'Could not open Privacy Policy.', backgroundColor: Colors.redAccent, colorText: Colors.white);
+      }
+    } catch (e) {
+      if (Get.isDialogOpen ?? false) Get.back();
+      Get.snackbar('Error', 'Failed to fetch link.', backgroundColor: Colors.redAccent, colorText: Colors.white);
     }
   }
 
+  // ==========================================
+  // ডায়নামিক Data Deletion লিংক (Admin Sync)
+  // ==========================================
   void _openWebDeletionForm() async {
-    const url = 'https://technovasoft668.github.io/delete-account.html'; // 🔥 আপনার লাইভ লিংক
-    if (await canLaunchUrl(Uri.parse(url))) {
-      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-    } else {
-      Get.snackbar('Error', 'Could not open the deletion form.', backgroundColor: Colors.redAccent, colorText: Colors.white);
+    Get.dialog(const Center(child: CircularProgressIndicator(color: Colors.purpleAccent)), barrierDismissible: false);
+
+    try {
+      DocumentSnapshot configDoc = await FirebaseFirestore.instance.collection('settings').doc('app_config').get();
+      if (Get.isDialogOpen ?? false) Get.back(); // লোডার অফ করা হলো
+
+      String url = 'https://technovasoft668.github.io/delete-account.html'; // ডিফল্ট ফলব্যাক লিংক
+
+      if (configDoc.exists && configDoc.data() != null) {
+        final data = configDoc.data() as Map<String, dynamic>;
+        // যদি ভবিষ্যতে অ্যাডমিন প্যানেলে deleteAccountUrl অপশন যোগ করেন, তবে এটি কাজ করবে
+        if (data['deleteAccountUrl'] != null && data['deleteAccountUrl'].toString().isNotEmpty) {
+          url = data['deleteAccountUrl'];
+        }
+      }
+
+      if (await canLaunchUrl(Uri.parse(url))) {
+        await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+      } else {
+        Get.snackbar('Error', 'Could not open the deletion form.', backgroundColor: Colors.redAccent, colorText: Colors.white);
+      }
+    } catch (e) {
+      if (Get.isDialogOpen ?? false) Get.back();
+      Get.snackbar('Error', 'Failed to fetch link.', backgroundColor: Colors.redAccent, colorText: Colors.white);
     }
   }
 
@@ -99,7 +142,7 @@ class ProfileView extends StatelessWidget {
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
             child: Column(
               children: [
-                // ১. User Avatar & Info
+                // 1. User Avatar & Info
                 Center(
                   child: Column(
                     children: [
@@ -118,16 +161,13 @@ class ProfileView extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 15),
-
                       Text(controller.userName.value, style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
                       const SizedBox(height: 8),
-
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 20),
                         child: Text(controller.userBio.value, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70, fontSize: 13)),
                       ),
                       const SizedBox(height: 15),
-
                       GestureDetector(
                         onTap: () => Get.to(() => const EditProfileView(), transition: Transition.downToUp),
                         child: Container(
@@ -148,7 +188,7 @@ class ProfileView extends StatelessWidget {
                 ),
                 const SizedBox(height: 25),
 
-                // ২. Social Stats
+                // 2. Social Stats
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
@@ -159,7 +199,7 @@ class ProfileView extends StatelessWidget {
                 ),
                 const SizedBox(height: 30),
 
-                // 🚀 ৩. New Wallet Card (Navigates to WalletView)
+                // 3. New Wallet Card (Navigates to WalletView)
                 GestureDetector(
                   onTap: () => Get.to(() => WalletView(), transition: Transition.downToUp),
                   child: Container(
@@ -182,7 +222,7 @@ class ProfileView extends StatelessWidget {
                               children: [
                                 const Icon(FontAwesomeIcons.coins, color: Colors.orangeAccent, size: 28),
                                 const SizedBox(width: 10),
-                                // 🔥 Display Real-time Coins from WalletController
+                                // Display Real-time Coins from WalletController
                                 Text('${walletController.myCoins.value}', style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold)),
                               ],
                             ),
@@ -203,22 +243,21 @@ class ProfileView extends StatelessWidget {
                 ),
                 const SizedBox(height: 25),
 
-                // ৪. Legal & Safety
+                // 4. Legal & Safety
                 _buildMenuCard([
                   _buildMenuItem(FontAwesomeIcons.userShield, 'Privacy & Safety', Colors.indigoAccent, onTap: () => Get.to(() => SettingsView(), transition: Transition.rightToLeftWithFade)),
-                  // 🔥 আপডেট করা হয়েছে: ইন-অ্যাপের বদলে সরাসরি গিটহাবের পেজ ওপেন হবে
                   _buildMenuItem(FontAwesomeIcons.fileContract, 'Terms & Privacy Policy', Colors.cyanAccent, onTap: _openPrivacyPolicy),
                 ]),
                 const SizedBox(height: 20),
 
-                // ৫. Account Actions
+                // 5. Account Actions
                 _buildMenuCard([
                   _buildMenuItem(FontAwesomeIcons.rightFromBracket, 'Log Out', Colors.orangeAccent, onTap: _showLogoutDialog),
                   _buildMenuItem(FontAwesomeIcons.trash, 'Delete Account (In-App)', Colors.redAccent, onTap: _showDeleteAccountDialog),
                   _buildMenuItem(FontAwesomeIcons.globe, 'Delete My Data Online', Colors.blueGrey, onTap: _openWebDeletionForm),
                 ]),
-
                 const SizedBox(height: 30),
+
                 const Text('Nova Live v1.0.0', style: TextStyle(color: Colors.white38, fontSize: 12, letterSpacing: 1)),
                 const SizedBox(height: 30),
               ],

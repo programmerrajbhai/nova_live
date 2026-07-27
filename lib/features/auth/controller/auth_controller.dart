@@ -7,14 +7,13 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+
 import '../../main_nav/view/main_nav_view.dart';
 
 class AuthController extends GetxController {
   final nameController = TextEditingController();
-
   var isAgreed = false.obs;
   var isLoading = false.obs;
-
   var selectedGender = 'Male'.obs;
   var dobString = ''.obs;
   var calculatedAge = 0.obs;
@@ -36,14 +35,13 @@ class AuthController extends GetxController {
   }
 
   // ==========================================
-  // ⚡ 1. One Tap Login (Anonymous)
+  //   1. One Tap Login (Anonymous)
   // ==========================================
   void onOneTapLoginClicked() async {
     if (!isAgreed.value) {
       _showAgreementWarning();
       return;
     }
-
     SharedPreferences prefs = await SharedPreferences.getInstance();
     bool hasAccount = prefs.getBool('hasAccount') ?? false;
 
@@ -59,34 +57,31 @@ class AuthController extends GetxController {
   }
 
   // ==========================================
-  // 🌐 2. Sign In With Google (v7.2.0+ Latest API)
+  //   2. Sign In With Google (v7.2.0+ Latest API)
   // ==========================================
   Future<void> signInWithGoogle() async {
     if (!isAgreed.value) {
       _showAgreementWarning();
       return;
     }
-
     try {
       isLoading.value = true;
-
-      // 🔥 ১. Google Sign-In এর নতুন 'instance' (v7.0+)
+      // Google Sign-In instance (v7.0+)
       final GoogleSignIn googleSignIn = GoogleSignIn.instance;
 
-      // 🔥 ২. নতুন নিয়মে আগে 'initialize()' কল করতে হয়
+      // initialize()
       await googleSignIn.initialize();
 
-      // 🔥 ৩. 'signIn()' এর বদলে এখন 'authenticate()' ব্যবহার করতে হয়
+      // authenticate()
       final GoogleSignInAccount? googleUser = await googleSignIn.authenticate();
-
       if (googleUser == null) {
         isLoading.value = false;
-        return; // ইউজার পপআপ কেটে দিলে
+        return; // User canceled
       }
 
       final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
 
-      // 🔥 ৪. ফায়ারবেসের জন্য এখন শুধু idToken লাগে, accessToken এর দরকার নেই
+      // Create credential
       final OAuthCredential credential = GoogleAuthProvider.credential(
         idToken: googleAuth.idToken,
       );
@@ -95,9 +90,8 @@ class AuthController extends GetxController {
       String uid = userCredential.user!.uid;
 
       DocumentSnapshot doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
-
       if (doc.exists) {
-        // পুরানো ইউজার
+        // Old user login
         SharedPreferences prefs = await SharedPreferences.getInstance();
         await prefs.setBool('hasAccount', true);
         await prefs.setBool('isLoggedIn', true);
@@ -108,11 +102,10 @@ class AuthController extends GetxController {
         isLoading.value = false;
         _checkPermissionsAndNavigate();
       } else {
-        // নতুন ইউজার
+        // New user - proceed to profile setup
         _resetForm();
         nameController.text = userCredential.user!.displayName ?? '';
         selectedAvatar.value = userCredential.user!.photoURL ?? defaultAvatars[0];
-
         isLoading.value = false;
         _showProfileSetupSheet();
       }
@@ -240,10 +233,8 @@ class AuthController extends GetxController {
             const SizedBox(height: 25),
             const Text('Complete Profile', style: TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
             const SizedBox(height: 15),
-
             const Align(alignment: Alignment.centerLeft, child: Text('Choose Avatar', style: TextStyle(color: Colors.grey, fontSize: 13, fontWeight: FontWeight.bold))),
             const SizedBox(height: 10),
-
             SizedBox(
               height: 75,
               child: Row(
@@ -300,7 +291,6 @@ class AuthController extends GetxController {
               ),
             ),
             const SizedBox(height: 20),
-
             TextField(
               controller: nameController,
               style: const TextStyle(color: Colors.white),
@@ -315,7 +305,6 @@ class AuthController extends GetxController {
               ),
             ),
             const SizedBox(height: 15),
-
             Obx(() => DropdownButtonFormField<String>(
               value: selectedGender.value,
               dropdownColor: const Color(0xFF2A2A2A),
@@ -336,7 +325,6 @@ class AuthController extends GetxController {
               },
             )),
             const SizedBox(height: 15),
-
             Obx(() => GestureDetector(
               onTap: () => _pickDateOfBirth(Get.context!),
               child: Container(
@@ -358,7 +346,6 @@ class AuthController extends GetxController {
               ),
             )),
             const SizedBox(height: 35),
-
             Obx(() => SizedBox(
               width: double.infinity,
               height: 55,
@@ -388,10 +375,9 @@ class AuthController extends GetxController {
 
     if (name.isEmpty) { Get.snackbar('Error', 'Nickname cannot be empty.', backgroundColor: Colors.orangeAccent, colorText: Colors.black); return; }
     if (dobString.value.isEmpty) { Get.snackbar('Error', 'Please select your Date of Birth.', backgroundColor: Colors.orangeAccent, colorText: Colors.black); return; }
-    if (calculatedAge.value < 18) { Get.snackbar('Access Denied 🚫', 'You must be at least 18 years old.', snackPosition: SnackPosition.TOP, backgroundColor: Colors.redAccent, colorText: Colors.white); return; }
+    if (calculatedAge.value < 18) { Get.snackbar('Access Denied 🔞', 'You must be at least 18 years old.', snackPosition: SnackPosition.TOP, backgroundColor: Colors.redAccent, colorText: Colors.white); return; }
 
     isLoading.value = true;
-
     try {
       User? currentUser = FirebaseAuth.instance.currentUser;
       String uid;
@@ -405,13 +391,29 @@ class AuthController extends GetxController {
 
       String finalAvatarToSave = selectedLocalImagePath.value.isNotEmpty ? selectedLocalImagePath.value : selectedAvatar.value;
 
+      // ==========================================================
+      // ডায়নামিক ওয়েলকাম কয়েন (Admin Panel Sync)
+      // ==========================================================
+      int dynamicWelcomeCoins = 0; // ডিফল্ট 0
+      try {
+        DocumentSnapshot configDoc = await FirebaseFirestore.instance.collection('settings').doc('app_config').get();
+        if (configDoc.exists && configDoc.data() != null) {
+          final data = configDoc.data() as Map<String, dynamic>;
+          dynamicWelcomeCoins = data['welcomeCoins'] ?? 0;
+        }
+      } catch (e) {
+        debugPrint("Failed to fetch welcome coins: $e");
+        // এরর হলেও আমরা ডিফল্ট 0 বা 500 রাখতে পারি, যাতে ইউজার রেজিস্ট্রেশন না আটকায়।
+      }
+
+      // ইউজার ডেটা ফায়ারবেসে সেভ করা হচ্ছে
       await FirebaseFirestore.instance.collection('users').doc(uid).set({
         'uid': uid,
         'name': name,
         'gender': selectedGender.value,
         'dob': dobString.value,
         'avatar': finalAvatarToSave,
-        'coins': 500,
+        'coins': dynamicWelcomeCoins, // <--- এখানে ডায়নামিক কয়েন বসানো হলো
         'totalEarnings': 0.0,
         'createdAt': FieldValue.serverTimestamp(),
         'ugcAcceptedAt': FieldValue.serverTimestamp(),
@@ -426,7 +428,6 @@ class AuthController extends GetxController {
 
       isLoading.value = false;
       Get.back(); // Close Bottom Sheet
-
       _checkPermissionsAndNavigate();
 
     } catch (e) {
@@ -438,7 +439,6 @@ class AuthController extends GetxController {
   Future<void> _checkPermissionsAndNavigate() async {
     var cameraStatus = await Permission.camera.status;
     var micStatus = await Permission.microphone.status;
-
     if (cameraStatus.isGranted && micStatus.isGranted) {
       _goToHome();
     } else {
@@ -483,9 +483,8 @@ class AuthController extends GetxController {
   void _goToHome() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
     String name = prefs.getString('userName') ?? 'User';
-
     Get.offAll(() => MainNavView(), transition: Transition.zoom);
-    Get.snackbar('Welcome $name! 🎉', 'You are ready to match!', backgroundColor: Colors.green, colorText: Colors.white);
+    Get.snackbar('Welcome $name! 🚀', 'You are ready to match!', backgroundColor: Colors.green, colorText: Colors.white);
   }
 
   @override
