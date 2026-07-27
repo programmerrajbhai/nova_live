@@ -1,6 +1,5 @@
 import 'package:get/get.dart';
 import 'package:flutter/material.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
@@ -11,17 +10,14 @@ class WalletController extends GetxController {
 
   var myUid = ''.obs;
   var myCoins = 0.obs;
-  var isProcessing = false.obs; // 🔥 এই লক ভেরিয়েবলটি হ্যাকারদের আটকাবে
+  var isProcessing = false.obs;
 
-  // 🎁 Daily Reward Variables
   var canClaimDaily = false.obs;
 
-  // 🎮 AdMob Variables
   RewardedAd? _rewardedAd;
   var isAdLoaded = false.obs;
   var isAdLoading = false.obs;
 
-  // 🔥 AdMob Test ID (পাবলিশ করার আগে আসল ID দেবেন)
   final String rewardedAdUnitId = 'ca-app-pub-3940256099942544/5224354917';
 
   @override
@@ -35,78 +31,85 @@ class WalletController extends GetxController {
     if (currentUser != null) {
       myUid.value = currentUser.uid;
       _listenToWalletUpdates();
-      _checkDailyRewardStatus();
       loadRewardedAd();
     }
   }
 
-  // 🔄 Firebase থেকে রিয়েলটাইম কয়েন আপডেট
+  // 🔄 Firebase থেকে রিয়েলটাইম কয়েন এবং লাস্ট ক্লেইম আপডেট
   void _listenToWalletUpdates() {
     if (myUid.value.isNotEmpty) {
       _db.collection('users').doc(myUid.value).snapshots().listen((doc) {
         if (doc.exists && doc.data() != null) {
-          myCoins.value = doc.data()!['coins'] ?? 0;
+          final data = doc.data()!;
+          myCoins.value = data['coins'] ?? 0;
+
+          // 🔥 ডিভাইস টাইমের বদলে সরাসরি সার্ভারের টাইমস্ট্যাম্প চেক করা হচ্ছে
+          Timestamp? lastClaim = data['lastClaimTimestamp'] as Timestamp?;
+          if (lastClaim == null) {
+            canClaimDaily.value = true;
+          } else {
+            DateTime lastDate = lastClaim.toDate().toUtc();
+            DateTime now = DateTime.now().toUtc();
+            canClaimDaily.value = (lastDate.year != now.year || lastDate.month != now.month || lastDate.day != now.day);
+          }
         }
       });
     }
   }
 
   // =========================================
-  // 🎁 Daily Check-in Logic (HACKER PROOF)
+  // 🎁 Daily Check-in Logic (100% HACKER PROOF)
   // =========================================
-  Future<void> _checkDailyRewardStatus() async {
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    String lastClaimDate = prefs.getString('last_daily_claim_${myUid.value}') ?? '';
-    String todayDate = DateTime.now().toIso8601String().substring(0, 10);
-
-    // যদি আজকের ডেট আর লাস্ট ক্লেইম ডেট না মেলে, তবেই বাটন অন হবে
-    canClaimDaily.value = (lastClaimDate != todayDate);
-  }
-
   Future<void> claimDailyReward() async {
-    // 🔥 ১. Instant Lock: যদি অলরেডি প্রসেসিং চলে বা ক্লেইম করা থাকে, তবে সাথে সাথে রিটার্ন করবে!
     if (!canClaimDaily.value || myUid.value.isEmpty || isProcessing.value) return;
 
-    // 🔥 ২. ক্লিক করার মিলি-সেকেন্ডের মধ্যে বাটন লক করে দেওয়া হলো!
     isProcessing.value = true;
-    canClaimDaily.value = false;
 
     try {
-      WriteBatch batch = _db.batch();
-      DocumentReference userRef = _db.collection('users').doc(myUid.value);
-      DocumentReference transactionRef = userRef.collection('coin_transactions').doc();
+      // ট্রানজেকশনের মাধ্যমে চেক করা হচ্ছে যাতে ডাবল ক্লিক কাজ না করে
+      await _db.runTransaction((transaction) async {
+        DocumentReference userRef = _db.collection('users').doc(myUid.value);
+        DocumentSnapshot userSnap = await transaction.get(userRef);
 
-      // কয়েন যোগ করা
-      batch.update(userRef, {'coins': FieldValue.increment(30)});
+        if (!userSnap.exists) throw Exception("User not found");
 
-      // হিস্ট্রি লগ সেভ করা
-      batch.set(transactionRef, {
-        'type': 'daily_reward',
-        'amount': 30,
-        'createdAt': FieldValue.serverTimestamp(),
-        'source': 'daily_check_in',
+        Timestamp? lastClaim = (userSnap.data() as Map<String, dynamic>).containsKey('lastClaimTimestamp')
+            ? userSnap.get('lastClaimTimestamp') as Timestamp?
+            : null;
+
+        if (lastClaim != null) {
+          DateTime lastDate = lastClaim.toDate().toUtc();
+          DateTime now = DateTime.now().toUtc();
+          if (lastDate.year == now.year && lastDate.month == now.month && lastDate.day == now.day) {
+            throw Exception("Already claimed today");
+          }
+        }
+
+        DocumentReference transactionRef = userRef.collection('coin_transactions').doc();
+
+        transaction.update(userRef, {
+          'coins': FieldValue.increment(30),
+          'lastClaimTimestamp': FieldValue.serverTimestamp(), // সার্ভার টাইমস্ট্যাম্প সেভ হচ্ছে
+        });
+
+        transaction.set(transactionRef, {
+          'type': 'daily_reward',
+          'amount': 30,
+          'createdAt': FieldValue.serverTimestamp(),
+          'source': 'daily_check_in',
+        });
       });
-
-      await batch.commit();
-
-      // লোকাল স্টোরেজে আজকের ডেট সেভ করা
-      SharedPreferences prefs = await SharedPreferences.getInstance();
-      String todayDate = DateTime.now().toIso8601String().substring(0, 10);
-      await prefs.setString('last_daily_claim_${myUid.value}', todayDate);
 
       Get.snackbar('Awesome! 🎁', 'You received 30 Daily Bonus Coins!', backgroundColor: Colors.green, colorText: Colors.white);
     } catch (e) {
-      // 🔥 ৩. যদি ইন্টারনেট না থাকার কারণে ফেইল হয়, তবে আবার ক্লেইম করার সুযোগ দেবে
-      canClaimDaily.value = true;
-      Get.snackbar('Error', 'Failed to claim reward. Try again.', backgroundColor: Colors.redAccent, colorText: Colors.white);
+      Get.snackbar('Error', 'Failed to claim or already claimed today.', backgroundColor: Colors.redAccent, colorText: Colors.white);
     } finally {
-      // প্রসেসিং শেষ
       isProcessing.value = false;
     }
   }
 
   // =========================================
-  // 🎮 AdMob Rewarded Video Logic (HACKER PROOF)
+  // 🎮 AdMob Rewarded Video Logic
   // =========================================
   void loadRewardedAd() {
     isAdLoading.value = true;
@@ -129,7 +132,6 @@ class WalletController extends GetxController {
   }
 
   void showRewardedAd() {
-    // 🔥 অ্যাড লোড না হলে বা প্রসেসিং চললে স্প্যাম ক্লিক আটকাবে
     if (_rewardedAd == null || !isAdLoaded.value || isProcessing.value) {
       Get.snackbar('Wait...', 'Video ad is not ready yet.', backgroundColor: Colors.orange, colorText: Colors.white);
       return;
@@ -149,9 +151,9 @@ class WalletController extends GetxController {
     );
 
     _rewardedAd!.show(onUserEarnedReward: (AdWithoutView ad, RewardItem reward) async {
-      if (myUid.value.isEmpty || isProcessing.value) return; // ডাবল রিওয়ার্ড আটকানো
+      if (myUid.value.isEmpty || isProcessing.value) return;
 
-      isProcessing.value = true; // বাটন লক
+      isProcessing.value = true;
       try {
         WriteBatch batch = _db.batch();
         DocumentReference userRef = _db.collection('users').doc(myUid.value);
@@ -169,7 +171,7 @@ class WalletController extends GetxController {
 
         Get.snackbar('Congratulations! 🎉', 'You earned 50 Free Coins!', backgroundColor: Colors.purpleAccent, colorText: Colors.white);
       } finally {
-        isProcessing.value = false; // বাটন আনলক
+        isProcessing.value = false;
       }
     });
   }
@@ -178,10 +180,9 @@ class WalletController extends GetxController {
   // ⚙️ Deduct Coins (Transaction-Safe 100%)
   // =========================================
   Future<bool> deductCoins(int amount, {String purpose = 'gift_spend', String source = 'audio_room'}) async {
-    // 🔥 ডাবল ট্যাপ বা স্প্যাম সেন্ড আটকানোর জন্য প্রসেসিং চেক
     if (myUid.value.isEmpty || isProcessing.value) return false;
 
-    isProcessing.value = true; // ফাংশন লক
+    isProcessing.value = true;
     try {
       await _db.runTransaction((transaction) async {
         final docRef = _db.collection('users').doc(myUid.value);
@@ -204,7 +205,7 @@ class WalletController extends GetxController {
         });
       });
 
-      return true; // সাকসেস
+      return true;
     } catch (e) {
       if (e.toString().contains('Insufficient coins')) {
         debugPrint('Transaction Failed: Insufficient coins');
@@ -213,7 +214,7 @@ class WalletController extends GetxController {
       }
       return false;
     } finally {
-      isProcessing.value = false; // ফাংশন আনলক
+      isProcessing.value = false;
     }
   }
 
