@@ -89,18 +89,39 @@ class ProfileController extends GetxController {
   Future<void> logOut() async {
     isProcessing.value = true;
     SharedPreferences prefs = await SharedPreferences.getInstance();
+
     if (myUid.value.isNotEmpty) {
-      await _db.collection('users').doc(myUid.value).update({'isOnline': false});
+      try {
+        await _db.collection('users').doc(myUid.value).update({'isOnline': false});
+      } catch (e) {
+        debugPrint("Status update failed: $e");
+      }
     }
+
+    // ১. ক্লিয়ার করার আগে ডিভাইস লিংকড আইডিটি সেভ করে রাখছি
+    String savedDeviceUid = prefs.getString('device_linked_uid') ?? '';
+
+    // ২. অ্যাপের সব লোকাল ডেটা মুছে দিচ্ছি
     await prefs.clear();
-    await _auth.signOut();
+
+    // ৩. ডিভাইস লিংকড আইডিটি পুনরায় সেট করে দিচ্ছি (যাতে One Tap Login মনে রাখে)
+    if (savedDeviceUid.isNotEmpty) {
+      await prefs.setString('device_linked_uid', savedDeviceUid);
+    }
+
+    // ৪. শুধুমাত্র গুগল ইউজারদের সাইনআউট করবো। Anonymous ইউজারদের সেশন রেখে দেবো।
+    User? currentUser = _auth.currentUser;
+    if (currentUser != null && !currentUser.isAnonymous) {
+      await _auth.signOut();
+    }
+
     if (Get.isRegistered<AuthController>()) {
       Get.find<AuthController>().isAgreed.value = false;
     }
+
     Get.offAll(() => LoginView(), transition: Transition.fadeIn);
     isProcessing.value = false;
   }
-
   // =========================================
   // 🛑 100% COMPLETE ACCOUNT DELETION FLOW
   // =========================================

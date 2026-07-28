@@ -6,11 +6,11 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:google_sign_in/google_sign_in.dart';
 
 import '../../main_nav/view/main_nav_view.dart';
 
 class AuthController extends GetxController {
+
   final nameController = TextEditingController();
   var isAgreed = false.obs;
   var isLoading = false.obs;
@@ -28,6 +28,7 @@ class AuthController extends GetxController {
     'https://cdn-icons-png.flaticon.com/512/4140/4140037.png',
     'https://cdn-icons-png.flaticon.com/512/4140/4140047.png',
   ];
+
   var selectedAvatar = ''.obs;
 
   void toggleAgreement(bool? value) {
@@ -35,84 +36,54 @@ class AuthController extends GetxController {
   }
 
   // ==========================================
-  //   1. One Tap Login (Anonymous)
+  //   1. One Tap Login (Device-Linked Login)
   // ==========================================
-  void onOneTapLoginClicked() async {
+  Future<void> onOneTapLoginClicked() async {
     if (!isAgreed.value) {
       _showAgreementWarning();
       return;
     }
-    SharedPreferences prefs = await SharedPreferences.getInstance();
-    bool hasAccount = prefs.getBool('hasAccount') ?? false;
 
-    if (hasAccount) {
-      isLoading.value = true;
-      await prefs.setBool('isLoggedIn', true);
-      isLoading.value = false;
-      _checkPermissionsAndNavigate();
-    } else {
-      _resetForm();
-      _showProfileSetupSheet();
-    }
-  }
+    isLoading.value = true;
 
-  // ==========================================
-  //   2. Sign In With Google (v7.2.0+ Latest API)
-  // ==========================================
-  Future<void> signInWithGoogle() async {
-    if (!isAgreed.value) {
-      _showAgreementWarning();
-      return;
-    }
     try {
-      isLoading.value = true;
-      // Google Sign-In instance (v7.0+)
-      final GoogleSignIn googleSignIn = GoogleSignIn.instance;
+      SharedPreferences prefs = await SharedPreferences.getInstance();
 
-      // initialize()
-      await googleSignIn.initialize();
+      String savedUid = prefs.getString('device_linked_uid') ?? '';
+      String currentUid = '';
 
-      // authenticate()
-      final GoogleSignInAccount? googleUser = await googleSignIn.authenticate();
-      if (googleUser == null) {
-        isLoading.value = false;
-        return; // User canceled
+      if (savedUid.isNotEmpty) {
+        currentUid = savedUid;
+      } else {
+        UserCredential userCredential = await FirebaseAuth.instance.signInAnonymously();
+        currentUid = userCredential.user!.uid;
+        await prefs.setString('device_linked_uid', currentUid);
       }
 
-      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      DocumentSnapshot doc = await FirebaseFirestore.instance.collection('users').doc(currentUid).get();
 
-      // Create credential
-      final OAuthCredential credential = GoogleAuthProvider.credential(
-        idToken: googleAuth.idToken,
-      );
-
-      UserCredential userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
-      String uid = userCredential.user!.uid;
-
-      DocumentSnapshot doc = await FirebaseFirestore.instance.collection('users').doc(uid).get();
       if (doc.exists) {
-        // Old user login
-        SharedPreferences prefs = await SharedPreferences.getInstance();
         await prefs.setBool('hasAccount', true);
         await prefs.setBool('isLoggedIn', true);
-        await prefs.setString('uid', uid);
-        await prefs.setString('userName', doc['name'] ?? 'User');
+        await prefs.setString('uid', currentUid);
+        await prefs.setString('userName', doc['name'] ?? 'Nova User');
         await prefs.setBool('ugcAccepted', true);
+
+        if (FirebaseAuth.instance.currentUser == null) {
+          await FirebaseAuth.instance.signInAnonymously();
+        }
 
         isLoading.value = false;
         _checkPermissionsAndNavigate();
       } else {
-        // New user - proceed to profile setup
-        _resetForm();
-        nameController.text = userCredential.user!.displayName ?? '';
-        selectedAvatar.value = userCredential.user!.photoURL ?? defaultAvatars[0];
         isLoading.value = false;
+        _resetForm();
         _showProfileSetupSheet();
       }
     } catch (e) {
       isLoading.value = false;
-      Get.snackbar('Error', 'Google Sign-In failed: $e', backgroundColor: Colors.redAccent, colorText: Colors.white);
-      debugPrint("Google Auth Error: $e");
+      Get.snackbar('Error', 'Login failed: $e', backgroundColor: Colors.redAccent, colorText: Colors.white);
+      debugPrint("One Tap Login Error: $e");
     }
   }
 
@@ -391,10 +362,7 @@ class AuthController extends GetxController {
 
       String finalAvatarToSave = selectedLocalImagePath.value.isNotEmpty ? selectedLocalImagePath.value : selectedAvatar.value;
 
-      // ==========================================================
-      // ডায়নামিক ওয়েলকাম কয়েন (Admin Panel Sync)
-      // ==========================================================
-      int dynamicWelcomeCoins = 0; // ডিফল্ট 0
+      int dynamicWelcomeCoins = 0;
       try {
         DocumentSnapshot configDoc = await FirebaseFirestore.instance.collection('settings').doc('app_config').get();
         if (configDoc.exists && configDoc.data() != null) {
@@ -403,17 +371,15 @@ class AuthController extends GetxController {
         }
       } catch (e) {
         debugPrint("Failed to fetch welcome coins: $e");
-        // এরর হলেও আমরা ডিফল্ট 0 বা 500 রাখতে পারি, যাতে ইউজার রেজিস্ট্রেশন না আটকায়।
       }
 
-      // ইউজার ডেটা ফায়ারবেসে সেভ করা হচ্ছে
       await FirebaseFirestore.instance.collection('users').doc(uid).set({
         'uid': uid,
         'name': name,
         'gender': selectedGender.value,
         'dob': dobString.value,
         'avatar': finalAvatarToSave,
-        'coins': dynamicWelcomeCoins, // <--- এখানে ডায়নামিক কয়েন বসানো হলো
+        'coins': dynamicWelcomeCoins,
         'totalEarnings': 0.0,
         'createdAt': FieldValue.serverTimestamp(),
         'ugcAcceptedAt': FieldValue.serverTimestamp(),
@@ -423,11 +389,12 @@ class AuthController extends GetxController {
       await prefs.setBool('hasAccount', true);
       await prefs.setBool('isLoggedIn', true);
       await prefs.setString('uid', uid);
+      await prefs.setString('device_linked_uid', uid);
       await prefs.setString('userName', name);
       await prefs.setBool('ugcAccepted', true);
 
       isLoading.value = false;
-      Get.back(); // Close Bottom Sheet
+      Get.back();
       _checkPermissionsAndNavigate();
 
     } catch (e) {

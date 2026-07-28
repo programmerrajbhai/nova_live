@@ -64,7 +64,6 @@ dependencies:
   # monitize
 
     # login with google
-  google_sign_in: ^7.2.0
 
 dev_dependencies:
   flutter_test:

@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
-import 'package:cloud_firestore/cloud_firestore.dart'; // 🔥 Firestore Import for History
+import 'package:cloud_firestore/cloud_firestore.dart';
+
 import '../controller/wallet_controller.dart';
 import '../../../core/widgets/premium_background.dart';
 
@@ -28,7 +29,7 @@ class WalletView extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 🏆 Balance Card
+                // Balance Card
                 Container(
                   width: double.infinity,
                   padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 20),
@@ -58,12 +59,12 @@ class WalletView extends StatelessWidget {
                     ],
                   ),
                 ),
-
                 const SizedBox(height: 40),
+
                 const Text('Earn Free Tokens', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 15),
 
-                // 🎁 1. Daily Check-in Card
+                // 1. Daily Check-in Card
                 _buildActionCard(
                   title: 'Daily Check-in',
                   subtitle: walletCtrl.canClaimDaily.value ? 'Claim your 30 free coins now!' : 'Come back tomorrow',
@@ -74,10 +75,9 @@ class WalletView extends StatelessWidget {
                   onTap: walletCtrl.canClaimDaily.value ? () => walletCtrl.claimDailyReward() : null,
                   isLoading: walletCtrl.isProcessing.value && walletCtrl.canClaimDaily.value,
                 ),
-
                 const SizedBox(height: 15),
 
-                // 📺 2. Watch Ad Card
+                // 2. Watch Ad Card
                 _buildActionCard(
                   title: 'Watch Video Ad',
                   subtitle: 'Earn 50 coins instantly',
@@ -88,10 +88,9 @@ class WalletView extends StatelessWidget {
                   onTap: walletCtrl.isAdLoaded.value ? () => walletCtrl.showRewardedAd() : null,
                   isLoading: walletCtrl.isAdLoading.value,
                 ),
-
                 const SizedBox(height: 40),
 
-                // 📜 3. Transaction History Section (New)
+                // 3. Transaction History Section
                 const Text('Recent Transactions', style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold)),
                 const SizedBox(height: 15),
                 _buildTransactionHistory(),
@@ -104,7 +103,7 @@ class WalletView extends StatelessWidget {
     );
   }
 
-  // 🧩 Custom Action Card Widget
+  // Custom Action Card Widget
   Widget _buildActionCard({
     required String title,
     required String subtitle,
@@ -156,13 +155,11 @@ class WalletView extends StatelessWidget {
     );
   }
 
-  // 📜 Transaction History Stream Widget
+  // Transaction History Stream Widget
   Widget _buildTransactionHistory() {
     return Obx(() {
       if (walletCtrl.myUid.value.isEmpty) return const SizedBox();
-
       return StreamBuilder<QuerySnapshot>(
-        // 🔥 ফায়ারবেস থেকে লাস্ট ১৫টা হিস্ট্রি রিড করা হচ্ছে
         stream: FirebaseFirestore.instance
             .collection('users')
             .doc(walletCtrl.myUid.value)
@@ -179,7 +176,6 @@ class WalletView extends StatelessWidget {
                 )
             );
           }
-
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
             return Center(
               child: Container(
@@ -203,13 +199,10 @@ class WalletView extends StatelessWidget {
               int amount = doc['amount'] ?? 0;
               String type = doc['type'] ?? 'transaction';
               Timestamp? timestamp = doc['createdAt'] as Timestamp?;
-
               DateTime date = timestamp != null ? timestamp.toDate() : DateTime.now();
-              String formattedDate = "${date.day}/${date.month}/${date.year} • ${date.hour > 12 ? date.hour - 12 : date.hour == 0 ? 12 : date.hour}:${date.minute.toString().padLeft(2, '0')} ${date.hour >= 12 ? 'PM' : 'AM'}";
+              String formattedDate = "${date.day}/${date.month}/${date.year}   ${date.hour > 12 ? date.hour - 12 : date.hour == 0 ? 12 : date.hour}:${date.minute.toString().padLeft(2, '0')} ${date.hour >= 12 ? 'PM' : 'AM'}";
 
               bool isIncome = amount > 0;
-
-              // টাইটেল সুন্দর করে ফরম্যাট করা (যেমন: daily_reward -> Daily Reward)
               String displayTitle = type.replaceAll('_', ' ').capitalizeFirst ?? type;
 
               return Container(
@@ -222,7 +215,6 @@ class WalletView extends StatelessWidget {
                 ),
                 child: Row(
                   children: [
-                    // আইকন (আয় হলে সবুজ উপরের দিকে, ব্যয় হলে লাল নিচের দিকে)
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
@@ -236,8 +228,6 @@ class WalletView extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(width: 15),
-
-                    // হিস্ট্রি টাইটেল ও ডেট
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -253,12 +243,10 @@ class WalletView extends StatelessWidget {
                         ],
                       ),
                     ),
-
-                    // কয়েনের পরিমাণ
                     Row(
                       children: [
                         Text(
-                          isIncome ? '+$amount' : '$amount', // মাইনাস (-) ফায়ারবেস থেকেই আসবে
+                          isIncome ? '+$amount' : '$amount',
                           style: TextStyle(
                             color: isIncome ? Colors.greenAccent : Colors.redAccent,
                             fontSize: 16,

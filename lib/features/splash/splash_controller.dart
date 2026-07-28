@@ -2,85 +2,84 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // প্রফেশনাল অথ চেকের জন্য যুক্ত করা হলো
 import 'package:url_launcher/url_launcher.dart';
 
 import '../auth/view/login_view.dart';
 import '../main_nav/view/main_nav_view.dart';
-import 'maintenance_view.dart'; // নতুন মেইনটেন্যান্স পেজ
+import 'maintenance_view.dart';
 
 class SplashController extends GetxController {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
+  final FirebaseAuth _auth = FirebaseAuth.instance; // অথ ইনিশিয়ালাইজেশন
 
-  // আপনার অ্যাপের বর্তমান ভার্সন (প্লে স্টোরে আপডেট দিলে এটিও বাড়াবেন)
   final String currentAppVersion = '1.0.0';
-  final String playStoreUrl = 'https://play.google.com/store/apps/details?id=com.nova.live'; // আপনার প্লে স্টোর লিংক দিন
+  final String playStoreUrl = 'https://play.google.com/store/apps/details?id=com.nova.live';
 
   @override
   void onInit() {
     super.onInit();
-    _checkAppConfig(); // অ্যাপ ওপেন হলেই আগে কনফিগারেশন চেক করবে
+    _checkAppConfig();
   }
 
-  // ফায়ারবেস থেকে গ্লোবাল সেটিংস চেক করার লজিক
   Future<void> _checkAppConfig() async {
     try {
       DocumentSnapshot doc = await _db.collection('settings').doc('app_config').get();
-
-      if (doc.exists) {
+      if (doc.exists && doc.data() != null) {
         var data = doc.data() as Map<String, dynamic>;
         bool isMaintenanceMode = data['isMaintenanceMode'] ?? false;
         bool forceUpdate = data['forceUpdate'] ?? false;
         String latestVersion = data['appVersion'] ?? '1.0.0';
 
-        // ১. মেইনটেন্যান্স মোড চেক
         if (isMaintenanceMode) {
           Get.offAll(() => const MaintenanceView(), transition: Transition.fadeIn);
           return;
         }
 
-        // ২. ফোর্স আপডেট চেক (যদি ফায়ারবেসের ভার্সন বর্তমান ভার্সনের চেয়ে বড় হয়)
         if (forceUpdate && _isUpdateRequired(latestVersion, currentAppVersion)) {
           _showUpdateDialog();
           return;
         }
       }
-
-      // ৩. সবকিছু ঠিক থাকলে সাধারণ লগইন স্ট্যাটাস চেক করবে
+      // কনফিগ চেক শেষ, এবার লগইন স্ট্যাটাস চেক করবে (আপনার কোডে এটি কমেন্ট করা ছিল)
       _checkLoginStatus();
-
     } catch (e) {
       debugPrint("Splash Config Error: $e");
-      // ইন্টারনেট না থাকলে বা এরর হলে স্বাভাবিকভাবে অ্যাপ চালু হবে
+      // কোনো কারণে ফায়ারবেস এরর দিলেও অ্যাপ যেন আটকে না থাকে
       _checkLoginStatus();
     }
   }
 
-  // ভার্সন কম্পেয়ার করার সিম্পল লজিক
   bool _isUpdateRequired(String latest, String current) {
     return latest.compareTo(current) > 0;
   }
 
-  // আপনার আগের লগইন স্ট্যাটাস চেকিং ফাংশন
+  // =========================================================
+  // প্রফেশনাল লগইন চেক: SharedPreferences + Firebase Auth (100% Policy Proof)
+  // =========================================================
   void _checkLoginStatus() async {
-    await Future.delayed(const Duration(seconds: 2));
+    await Future.delayed(const Duration(seconds: 2)); // স্প্ল্যাশ স্ক্রিন অ্যানিমেশন ডিলে
+
     SharedPreferences prefs = await SharedPreferences.getInstance();
     bool isLoggedIn = prefs.getBool('isLoggedIn') ?? false;
+    User? currentUser = _auth.currentUser; // ফায়ারবেস সেশন চেক
 
-    if (isLoggedIn) {
+    // যদি লোকাল স্টোরেজ এবং ফায়ারবেস সেশন—উভয় জায়গাতেই ইউজার লগইন থাকে
+    if (isLoggedIn && currentUser != null) {
       Get.offAll(() => MainNavView(), transition: Transition.fadeIn);
     } else {
+      // সেশন এক্সপায়ার হলে বা নতুন ইউজার হলে লগইন পেজে যাবে
       Get.offAll(() => LoginView(), transition: Transition.fadeIn);
     }
   }
 
-  // ফোর্স আপডেট ডায়ালগ (ইউজার এটি স্কিপ করতে পারবে না)
   void _showUpdateDialog() {
     Get.defaultDialog(
       title: "Update Required",
       titleStyle: const TextStyle(color: Colors.cyanAccent, fontWeight: FontWeight.bold, fontSize: 22),
       backgroundColor: const Color(0xFF1E1E1E),
-      barrierDismissible: false, // বাইরে ক্লিক করলে কাটবে না
-      onWillPop: () async => false, // ব্যাক বাটনে কাজ করবে না
+      barrierDismissible: false,
+      onWillPop: () async => false,
       content: const Padding(
         padding: EdgeInsets.all(15.0),
         child: Text(
