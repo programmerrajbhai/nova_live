@@ -58,8 +58,7 @@ class SplashController extends GetxController {
   // প্রফেশনাল লগইন চেক: SharedPreferences + Firebase Auth (100% Policy Proof)
   // =========================================================
   void _checkLoginStatus() async {
-    await Future.delayed(const Duration(seconds: 2)); // স্প্ল্যাশ স্ক্রিন অ্যানিমেশন ডিলে
-
+    await Future.delayed(const Duration(milliseconds: 300));
     SharedPreferences prefs = await SharedPreferences.getInstance();
     bool isLoggedIn = prefs.getBool('isLoggedIn') ?? false;
     User? currentUser = _auth.currentUser; // ফায়ারবেস সেশন চেক
