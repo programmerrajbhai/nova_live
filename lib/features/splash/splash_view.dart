@@ -17,29 +17,70 @@ class SplashView extends StatelessWidget {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // গ্লোয়িং লোগো
+            // 🔥 Glowing Logo
             Container(
-              padding: const EdgeInsets.all(25),
+              width: 150,
+              height: 150,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Colors.purpleAccent.withOpacity(0.1),
+                color: Colors.white.withOpacity(0.03),
                 boxShadow: [
-                  BoxShadow(color: Colors.purpleAccent.withOpacity(0.5), blurRadius: 40, spreadRadius: 10)
+                  BoxShadow(
+                    color: Colors.purpleAccent.withOpacity(0.35),
+                    blurRadius: 45,
+                    spreadRadius: 8,
+                  ),
+                  BoxShadow(
+                    color: Colors.blueAccent.withOpacity(0.25),
+                    blurRadius: 35,
+                    spreadRadius: 4,
+                  ),
                 ],
               ),
-              child: const Icon(FontAwesomeIcons.satelliteDish, size: 80, color: Colors.purpleAccent),
+              child: ClipOval(
+                child: Padding(
+                  padding: const EdgeInsets.all(18),
+                  child: Image.asset(
+                    "assets/images/app_icon.png",
+                    fit: BoxFit.contain,
+                  ),
+                ),
+              ),
             ),
-            const SizedBox(height: 30),
 
-            // অ্যাপের নাম
+            const SizedBox(height: 35),
+
             const Text(
-                'Nova Live',
-                style: TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold, letterSpacing: 1.5)
+              "Nova Live",
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 34,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.3,
+              ),
             ),
-            const SizedBox(height: 40),
 
-            // ছোট্ট লোডিং এনিমেশন
-            const CircularProgressIndicator(color: Colors.purpleAccent),
+            const SizedBox(height: 10),
+
+            Text(
+              "Connect • Stream • Enjoy",
+              style: TextStyle(
+                color: Colors.white.withOpacity(0.65),
+                fontSize: 15,
+                letterSpacing: 1,
+              ),
+            ),
+
+            const SizedBox(height: 45),
+
+            const SizedBox(
+              width: 32,
+              height: 32,
+              child: CircularProgressIndicator(
+                strokeWidth: 3,
+                color: Colors.purpleAccent,
+              ),
+            ),
           ],
         ),
       ),
