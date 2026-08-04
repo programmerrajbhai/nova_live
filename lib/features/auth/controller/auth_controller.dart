@@ -18,6 +18,10 @@ class AuthController extends GetxController {
   var dobString = ''.obs;
   var calculatedAge = 0.obs;
 
+
+  var ageVerified = false.obs;
+  static const String currentPolicyVersion = "1.0";
+
   final ImagePicker _picker = ImagePicker();
   var selectedLocalImagePath = ''.obs;
 
@@ -63,19 +67,51 @@ class AuthController extends GetxController {
       DocumentSnapshot doc = await FirebaseFirestore.instance.collection('users').doc(currentUid).get();
 
       if (doc.exists) {
+
+        final data = doc.data() as Map<String, dynamic>;
+
+        bool verified = data['ageVerified'] ?? false;
+        String dob = data['dob'] ?? '';
+
+        if (!verified || dob.isEmpty) {
+
+          isLoading.value = false;
+
+          nameController.text = data['name'] ?? '';
+
+          selectedGender.value =
+              data['gender'] ?? 'Male';
+
+          selectedAvatar.value =
+              data['avatar'] ?? defaultAvatars.first;
+
+          _showProfileSetupSheet();
+
+          return;
+        }
+
         await prefs.setBool('hasAccount', true);
         await prefs.setBool('isLoggedIn', true);
+
         await prefs.setString('uid', currentUid);
-        await prefs.setString('userName', doc['name'] ?? 'Nova User');
+
+        await prefs.setString(
+            'userName',
+            data['name'] ?? 'Nova User');
+
         await prefs.setBool('ugcAccepted', true);
+
+        await prefs.setBool('ageVerified', true);
 
         if (FirebaseAuth.instance.currentUser == null) {
           await FirebaseAuth.instance.signInAnonymously();
         }
 
         isLoading.value = false;
+
         _checkPermissionsAndNavigate();
-      } else {
+      }
+      else {
         isLoading.value = false;
         _resetForm();
         _showProfileSetupSheet();
@@ -102,6 +138,7 @@ class AuthController extends GetxController {
     selectedGender.value = 'Male';
     dobString.value = '';
     calculatedAge.value = 0;
+    ageVerified.value = false;
     selectedAvatar.value = defaultAvatars[0];
     selectedLocalImagePath.value = '';
   }
@@ -140,6 +177,7 @@ class AuthController extends GetxController {
         age--;
       }
       calculatedAge.value = age;
+      ageVerified.value = age >= 18;
     }
   }
 
@@ -383,6 +421,15 @@ class AuthController extends GetxController {
         'totalEarnings': 0.0,
         'createdAt': FieldValue.serverTimestamp(),
         'ugcAcceptedAt': FieldValue.serverTimestamp(),
+
+        'ageVerified': true,
+        'ageVerifiedAt': FieldValue.serverTimestamp(),
+        'policyVersion': currentPolicyVersion,
+        'privacyAccepted': true,
+        'termsAccepted': true,
+        'communityAccepted': true,
+
+
       });
 
       SharedPreferences prefs = await SharedPreferences.getInstance();
@@ -392,6 +439,14 @@ class AuthController extends GetxController {
       await prefs.setString('device_linked_uid', uid);
       await prefs.setString('userName', name);
       await prefs.setBool('ugcAccepted', true);
+
+      await prefs.setBool('ageVerified', true);
+      await prefs.setString(
+        'policyVersion',
+        currentPolicyVersion,
+      );
+
+
 
       isLoading.value = false;
       Get.back();
