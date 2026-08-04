@@ -6,7 +6,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:image_picker/image_picker.dart';
-
+import 'package:firebase_storage/firebase_storage.dart';
 import '../../main_nav/view/main_nav_view.dart';
 
 class AuthController extends GetxController {
@@ -21,7 +21,7 @@ class AuthController extends GetxController {
 
   var ageVerified = false.obs;
   static const String currentPolicyVersion = "1.0";
-
+  final FirebaseStorage _storage = FirebaseStorage.instance;
   final ImagePicker _picker = ImagePicker();
   var selectedLocalImagePath = ''.obs;
 
@@ -53,65 +53,79 @@ class AuthController extends GetxController {
     try {
       SharedPreferences prefs = await SharedPreferences.getInstance();
 
-      String savedUid = prefs.getString('device_linked_uid') ?? '';
-      String currentUid = '';
-
-      if (savedUid.isNotEmpty) {
-        currentUid = savedUid;
-      } else {
-        UserCredential userCredential = await FirebaseAuth.instance.signInAnonymously();
-        currentUid = userCredential.user!.uid;
-        await prefs.setString('device_linked_uid', currentUid);
+      // Firebase Auth UID-ই একমাত্র trusted UID।
+      // SharedPreferences-এর পুরোনো UID দিয়ে অন্য user document access করা হবে না।
+      User? authUser = FirebaseAuth.instance.currentUser;
+      if (authUser == null) {
+        final UserCredential credential =
+        await FirebaseAuth.instance.signInAnonymously();
+        authUser = credential.user;
       }
 
-      DocumentSnapshot doc = await FirebaseFirestore.instance.collection('users').doc(currentUid).get();
+      if (authUser == null) {
+        throw FirebaseAuthException(
+          code: 'anonymous-sign-in-failed',
+          message: 'Unable to create an anonymous Nova Live session.',
+        );
+      }
+
+      final String currentUid = authUser.uid;
+      await prefs.setString('device_linked_uid', currentUid);
+
+      final DocumentReference<Map<String, dynamic>> userRef =
+      FirebaseFirestore.instance.collection('users').doc(currentUid);
+      final DocumentSnapshot<Map<String, dynamic>> doc = await userRef.get();
 
       if (doc.exists) {
+        final Map<String, dynamic> data = doc.data() ?? <String, dynamic>{};
+        final bool verified = data['ageVerified'] == true;
+        final String dob = (data['dob'] ?? '').toString().trim();
 
-        final data = doc.data() as Map<String, dynamic>;
-
-        bool verified = data['ageVerified'] ?? false;
-        String dob = data['dob'] ?? '';
-
+        // পুরোনো user-এর DOB বা age verification না থাকলে Home-এ যেতে দেবে না।
         if (!verified || dob.isEmpty) {
-
           isLoading.value = false;
 
-          nameController.text = data['name'] ?? '';
+          nameController.text = (data['name'] ?? '').toString();
+          selectedGender.value = (data['gender'] ?? 'Male').toString();
 
-          selectedGender.value =
-              data['gender'] ?? 'Male';
-
+          final String savedAvatar = (data['avatar'] ?? '').toString();
           selectedAvatar.value =
-              data['avatar'] ?? defaultAvatars.first;
+          savedAvatar.isNotEmpty ? savedAvatar : defaultAvatars.first;
+
+          selectedLocalImagePath.value = '';
+          dobString.value = '';
+          calculatedAge.value = 0;
+          ageVerified.value = false;
+
+          Get.snackbar(
+            'Age Verification Required',
+            'Please confirm your date of birth to continue.',
+            snackPosition: SnackPosition.TOP,
+            backgroundColor: Colors.orangeAccent,
+            colorText: Colors.black,
+          );
 
           _showProfileSetupSheet();
-
           return;
         }
 
         await prefs.setBool('hasAccount', true);
         await prefs.setBool('isLoggedIn', true);
-
         await prefs.setString('uid', currentUid);
-
         await prefs.setString(
-            'userName',
-            data['name'] ?? 'Nova User');
-
+          'userName',
+          (data['name'] ?? 'Nova User').toString(),
+        );
         await prefs.setBool('ugcAccepted', true);
-
         await prefs.setBool('ageVerified', true);
-
-        if (FirebaseAuth.instance.currentUser == null) {
-          await FirebaseAuth.instance.signInAnonymously();
-        }
+        await prefs.setString(
+          'policyVersion',
+          (data['policyVersion'] ?? currentPolicyVersion).toString(),
+        );
 
         isLoading.value = false;
-
-        _checkPermissionsAndNavigate();
-      }
-      else {
+        await _checkPermissionsAndNavigate();
+      } else {
         isLoading.value = false;
         _resetForm();
         _showProfileSetupSheet();
@@ -126,7 +140,7 @@ class AuthController extends GetxController {
   void _showAgreementWarning() {
     Get.snackbar(
         'Agreement Required ⚠️',
-        'You must agree to the UGC Policy, Terms, and Privacy Policy to continue.',
+        'You must agree to the Terms, Privacy Policy, Community Guidelines, and Child Safety Standards to continue.',
         snackPosition: SnackPosition.BOTTOM,
         backgroundColor: Colors.redAccent,
         colorText: Colors.white
@@ -398,7 +412,7 @@ class AuthController extends GetxController {
         uid = currentUser.uid;
       }
 
-      String finalAvatarToSave = selectedLocalImagePath.value.isNotEmpty ? selectedLocalImagePath.value : selectedAvatar.value;
+      final String finalAvatarToSave = await _resolveAvatarUrl(uid);
 
       int dynamicWelcomeCoins = 0;
       try {
@@ -411,26 +425,38 @@ class AuthController extends GetxController {
         debugPrint("Failed to fetch welcome coins: $e");
       }
 
-      await FirebaseFirestore.instance.collection('users').doc(uid).set({
+      final DocumentReference<Map<String, dynamic>> userRef =
+      FirebaseFirestore.instance.collection('users').doc(uid);
+      final DocumentSnapshot<Map<String, dynamic>> existingUser =
+      await userRef.get();
+
+      final Map<String, dynamic> userData = <String, dynamic>{
         'uid': uid,
         'name': name,
         'gender': selectedGender.value,
         'dob': dobString.value,
         'avatar': finalAvatarToSave,
-        'coins': dynamicWelcomeCoins,
-        'totalEarnings': 0.0,
-        'createdAt': FieldValue.serverTimestamp(),
         'ugcAcceptedAt': FieldValue.serverTimestamp(),
-
         'ageVerified': true,
         'ageVerifiedAt': FieldValue.serverTimestamp(),
         'policyVersion': currentPolicyVersion,
         'privacyAccepted': true,
         'termsAccepted': true,
         'communityAccepted': true,
+        'childSafetyAccepted': true,
+        'profileUpdatedAt': FieldValue.serverTimestamp(),
+      };
 
+      // Existing profile-এর coins, earnings, followers ইত্যাদি overwrite হবে না।
+      if (!existingUser.exists) {
+        userData.addAll(<String, dynamic>{
+          'coins': dynamicWelcomeCoins,
+          'totalEarnings': 0.0,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+      }
 
-      });
+      await userRef.set(userData, SetOptions(merge: true));
 
       SharedPreferences prefs = await SharedPreferences.getInstance();
       await prefs.setBool('hasAccount', true);
@@ -455,6 +481,46 @@ class AuthController extends GetxController {
     } catch (e) {
       isLoading.value = false;
       Get.snackbar('Error', 'Failed to save data: $e', backgroundColor: Colors.redAccent, colorText: Colors.white);
+    }
+  }
+
+  Future<String> _resolveAvatarUrl(String uid) async {
+    final String remoteAvatar = selectedAvatar.value.trim();
+
+    if (selectedLocalImagePath.value.isEmpty) {
+      return remoteAvatar.isNotEmpty ? remoteAvatar : defaultAvatars.first;
+    }
+
+    try {
+      final File imageFile = File(selectedLocalImagePath.value);
+
+      if (!await imageFile.exists()) {
+        return remoteAvatar.isNotEmpty ? remoteAvatar : defaultAvatars.first;
+      }
+
+      final Reference storageRef = _storage.ref().child(
+        'avatars/$uid/profile_${DateTime.now().millisecondsSinceEpoch}.jpg',
+      );
+
+      final TaskSnapshot snapshot = await storageRef.putFile(
+        imageFile,
+        SettableMetadata(contentType: 'image/jpeg'),
+      );
+
+      return await snapshot.ref.getDownloadURL();
+    } catch (e) {
+      // Firebase Storage access/rules unavailable হলেও registration fail করবে না।
+      debugPrint('Avatar upload skipped: $e');
+
+      Get.snackbar(
+        'Avatar Upload Skipped',
+        'Your profile was saved with a default avatar.',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.orangeAccent,
+        colorText: Colors.black,
+      );
+
+      return remoteAvatar.isNotEmpty ? remoteAvatar : defaultAvatars.first;
     }
   }
 
