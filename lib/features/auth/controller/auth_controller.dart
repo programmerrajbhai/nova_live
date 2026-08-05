@@ -580,4 +580,5 @@ class AuthController extends GetxController {
     nameController.dispose();
     super.onClose();
   }
+
 }
