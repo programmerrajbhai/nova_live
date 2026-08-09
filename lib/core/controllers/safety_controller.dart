@@ -88,63 +88,55 @@ class SafetyController extends GetxController {
   // =========================================
   // 🔥 Universal Report System
   // =========================================
+
+// =========================================
+  //   Universal Report System (Standardized Schema)
+  // =========================================
+
   Future<bool> submitReport({
     required String reportedUserId,
     String? roomId,
+    String? messageId, // 🔥 Added
     required String reason,
     required String details,
-    required String source,
+    required String source, // Must be: 'user_profile', 'chat', 'audio_room', or 'message'
   }) async {
     isProcessing.value = true;
     try {
       SharedPreferences prefs = await SharedPreferences.getInstance();
       String myUid = prefs.getString('uid') ?? '';
 
-      // ১. অথেনটিকেশন চেক
-      if (myUid.isEmpty) {
-        Get.snackbar('Error', 'Authentication error. Please re-login.', backgroundColor: Colors.redAccent, colorText: Colors.white);
+      if (myUid.isEmpty || myUid == reportedUserId) {
+        Get.snackbar('Error', 'Action denied.', backgroundColor: Colors.redAccent, colorText: Colors.white);
         return false;
       }
 
-      // ২. নিজেকে রিপোর্ট করছে কি না চেক
-      if (myUid == reportedUserId) {
-        Get.snackbar('Oops!', 'You cannot report yourself.', backgroundColor: Colors.orangeAccent, colorText: Colors.white);
-        return false;
-      }
-
-      // ৩. ফায়ারবেসে রিপোর্ট সেভ করা
+      // 🔥 100% Standardized Schema matching Admin Panel
       await _db.collection('reports').add({
         'reporterId': myUid,
         'reportedUserId': reportedUserId,
         'roomId': roomId ?? '',
+        'messageId': messageId ?? '',
         'reason': reason,
         'details': details,
-        'status': 'pending', // pending, reviewed, resolved
-        'createdAt': FieldValue.serverTimestamp(),
         'source': source,
+        'status': 'pending',
+        'createdAt': FieldValue.serverTimestamp(),
+        'reviewedAt': null,   // 🔥 Added
+        'reviewedBy': null,   // 🔥 Added
+        'actionTaken': null,  // 🔥 Added
       });
 
-      // ৪. সেফ নেভিগেশন
-      if (Get.isDialogOpen ?? false) Get.back();
       if (Get.isBottomSheetOpen ?? false) Get.back();
-
-      Get.snackbar(
-        'Report Submitted ✅',
-        'Our team will review this within 24 hours.',
-        backgroundColor: Colors.orangeAccent,
-        colorText: Colors.black,
-        snackPosition: SnackPosition.BOTTOM,
-        duration: const Duration(seconds: 4),
-      );
-
-      return true; // সাকসেস
-
+      Get.snackbar('Report Submitted', 'Our team will review this within 24 hours.', backgroundColor: Colors.orangeAccent, colorText: Colors.black);
+      return true;
     } catch (e) {
-      debugPrint('Report Error: $e');
-      Get.snackbar('Error', 'Failed to submit report. Try again later.', backgroundColor: Colors.redAccent, colorText: Colors.white);
+      Get.snackbar('Error', 'Failed to submit report.', backgroundColor: Colors.redAccent, colorText: Colors.white);
       return false;
     } finally {
       isProcessing.value = false;
     }
   }
+
+
 }

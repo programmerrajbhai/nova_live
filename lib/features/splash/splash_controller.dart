@@ -8,7 +8,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../auth/view/login_view.dart';
 import '../main_nav/view/main_nav_view.dart';
 import 'maintenance_view.dart';
-import 'banned_view.dart'; // 🔥 এটি যুক্ত করা হয়েছে
+import 'banned_view.dart'; // 🔥 Make sure BannedView exists in splash folder
 
 class SplashController extends GetxController {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
@@ -44,7 +44,6 @@ class SplashController extends GetxController {
       }
       _checkLoginStatus();
     } catch (e) {
-      debugPrint("Splash Config Error: $e");
       _checkLoginStatus();
     }
   }
@@ -54,7 +53,7 @@ class SplashController extends GetxController {
   }
 
   // =========================================================
-  // প্রফেশনাল লগইন চেক: SharedPreferences + Firebase Auth
+  // 🔥 Central Account Ban Guard (100% Enforced)
   // =========================================================
   void _checkLoginStatus() async {
     await Future.delayed(const Duration(milliseconds: 300));
@@ -64,23 +63,23 @@ class SplashController extends GetxController {
 
     if (isLoggedIn && currentUser != null) {
       try {
-        DocumentSnapshot doc = await _db.collection('users').doc(currentUser.uid).get();
-        if (doc.exists && doc.data() != null) {
-          final data = doc.data() as Map<String, dynamic>;
-          bool isBanned = data['isBanned'] == true;
+        DocumentSnapshot userDoc = await _db.collection('users').doc(currentUser.uid).get();
+        if (userDoc.exists && userDoc.data() != null) {
+          final data = userDoc.data() as Map<String, dynamic>;
+          bool isBanned = data['isBanned'] ?? false;
 
           if (isBanned) {
             Timestamp? bannedUntil = data['bannedUntil'] as Timestamp?;
             String banType = data['banType'] ?? 'permanent';
             String banReason = data['banReason'] ?? 'Violation of policies';
 
-            // Logic: Permanent Ban
+            // 1. Permanent Ban
             if (banType == 'permanent' || bannedUntil == null) {
               Get.offAll(() => BannedView(banReason: banReason, banType: 'permanent'));
               return;
             }
 
-            // Logic: Temporary Suspension
+            // 2. Temporary Suspension
             DateTime unbanDate = bannedUntil.toDate();
             if (unbanDate.isAfter(DateTime.now())) {
               Get.offAll(() => BannedView(
@@ -90,7 +89,7 @@ class SplashController extends GetxController {
               ));
               return;
             } else {
-              // Logic: Automatic Unban
+              // 3. Automatic Unban (Time is over)
               await _db.collection('users').doc(currentUser.uid).update({
                 'isBanned': false,
                 'bannedUntil': FieldValue.delete(),
@@ -108,6 +107,7 @@ class SplashController extends GetxController {
       Get.offAll(() => LoginView(), transition: Transition.fadeIn);
     }
   }
+
 
   void _showUpdateDialog() {
     Get.defaultDialog(
