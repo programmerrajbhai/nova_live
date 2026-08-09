@@ -63,86 +63,80 @@ class MessagesView extends StatelessWidget {
             const SizedBox(width: 10),
           ],
         ),
-        body: Obx(() {
-          if (controller.myUid.value.isEmpty) {
-            return const Center(child: CircularProgressIndicator(color: Color(0xFFA855F7)));
-          }
+          body: Obx(() {
+            if (controller.myUid.value.isEmpty) {
+              return const Center(child: CircularProgressIndicator(color: Color(0xFFA855F7)));
+            }
 
-          return StreamBuilder<QuerySnapshot>(
-            stream: controller.getInboxStream(),
-            builder: (context, snapshot) {
-              if (snapshot.hasError) return _buildStateView(icon: Icons.error_outline_rounded, iconColor: Colors.redAccent, title: 'Error', subtitle: 'Connection failed.');
-              if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator(color: Color(0xFFA855F7)));
-              if (!snapshot.hasData || snapshot.data!.docs.isEmpty) return _buildStateView(icon: Icons.chat_bubble_outline_rounded, iconColor: const Color(0xFF22D3EE), title: 'No messages yet', subtitle: 'Match with someone to start chatting!');
+            return StreamBuilder<List<QueryDocumentSnapshot>>(
+              stream: controller.getInboxStream(),
+              builder: (context, snapshot) {
+                if (snapshot.hasError) return _buildStateView(icon: Icons.error_outline_rounded, iconColor: Colors.redAccent, title: 'Error', subtitle: 'Connection failed.');
+                if (snapshot.connectionState == ConnectionState.waiting) return const Center(child: CircularProgressIndicator(color: Color(0xFFA855F7)));
+                if (!snapshot.hasData || snapshot.data!.isEmpty) return _buildStateView(icon: Icons.chat_bubble_outline_rounded, iconColor: const Color(0xFF22D3EE), title: 'No messages yet', subtitle: 'Match with someone to start chatting!');
 
-              var docs = snapshot.data!.docs.toList();
-              String query = controller.searchQuery.value.toLowerCase();
+                var docs = snapshot.data!;
+                String query = controller.searchQuery.value.toLowerCase();
 
-              docs.sort((a, b) {
-                final aData = a.data() as Map<String, dynamic>;
-                final bData = b.data() as Map<String, dynamic>;
+                // Sorting by time
+                docs.sort((a, b) {
+                  final aData = a.data() as Map<String, dynamic>;
+                  final bData = b.data() as Map<String, dynamic>;
+                  int timeA = aData['lastUpdated'] is int ? aData['lastUpdated'] : (aData['lastUpdated'] is Timestamp ? (aData['lastUpdated'] as Timestamp).millisecondsSinceEpoch : 0);
+                  int timeB = bData['lastUpdated'] is int ? bData['lastUpdated'] : (bData['lastUpdated'] is Timestamp ? (bData['lastUpdated'] as Timestamp).millisecondsSinceEpoch : 0);
+                  return timeB.compareTo(timeA);
+                });
 
-                int timeA = aData['lastUpdated'] is int ? aData['lastUpdated'] : (aData['lastUpdated'] is Timestamp ? (aData['lastUpdated'] as Timestamp).millisecondsSinceEpoch : 0);
-                int timeB = bData['lastUpdated'] is int ? bData['lastUpdated'] : (bData['lastUpdated'] is Timestamp ? (bData['lastUpdated'] as Timestamp).millisecondsSinceEpoch : 0);
+                // Search Filter Only (Block filtering is already done in controller)
+                final filteredDocs = docs.where((doc) {
+                  final roomData = doc.data() as Map<String, dynamic>;
+                  final List participants = roomData['participants'] ?? [];
+                  final targetUid = participants.firstWhere((id) => id.toString() != controller.myUid.value, orElse: () => '').toString();
 
-                return timeB.compareTo(timeA);
-              });
+                  if (query.isNotEmpty) {
+                    final usersData = Map<String, dynamic>.from(roomData['usersData'] ?? {});
+                    final targetData = Map<String, dynamic>.from(usersData[targetUid] ?? {});
+                    final targetName = (targetData['name'] ?? '').toString().toLowerCase();
+                    if (!targetName.contains(query)) return false;
+                  }
+                  return true;
+                }).toList();
 
-              // 🔥 Master Filtering Logic (Hide Blocked Users & Search)
-              final filteredDocs = docs.where((doc) {
-                final roomData = doc.data() as Map<String, dynamic>;
-                final List participants = roomData['participants'] ?? [];
-                final targetUid = participants.firstWhere((id) => id.toString() != controller.myUid.value, orElse: () => '').toString();
-
-                // 🚫 ব্লক করা ইউজারদের ইনবক্সে শো করাবে না (Play Store Policy)
-                if (controller.blockedUsers.contains(targetUid)) return false;
-
-                if (query.isNotEmpty) {
-                  final usersData = Map<String, dynamic>.from(roomData['usersData'] ?? {});
-                  final targetData = Map<String, dynamic>.from(usersData[targetUid] ?? {});
-                  final targetName = (targetData['name'] ?? '').toString().toLowerCase();
-                  if (!targetName.contains(query)) return false;
+                if (filteredDocs.isEmpty) {
+                  return _buildStateView(icon: Icons.search_off_rounded, iconColor: Colors.orangeAccent, title: 'No results', subtitle: 'Nothing found here.');
                 }
-                return true;
-              }).toList();
 
-              if (filteredDocs.isEmpty) {
-                return _buildStateView(icon: Icons.search_off_rounded, iconColor: Colors.orangeAccent, title: 'No results', subtitle: 'Nothing found here.');
-              }
+                return ListView.builder(
+                  padding: const EdgeInsets.fromLTRB(16, 10, 16, 110),
+                  physics: const BouncingScrollPhysics(),
+                  itemCount: filteredDocs.length,
+                  itemBuilder: (context, index) {
+                    final roomData = filteredDocs[index].data() as Map<String, dynamic>;
+                    final String roomId = filteredDocs[index].id;
+                    final List<dynamic> participants = roomData['participants'] ?? [];
+                    final String targetUid = participants.firstWhere((id) => id.toString() != controller.myUid.value, orElse: () => '').toString();
+                    if (targetUid.isEmpty) return const SizedBox.shrink();
 
-              return ListView.builder(
-                padding: const EdgeInsets.fromLTRB(16, 10, 16, 110),
-                physics: const BouncingScrollPhysics(),
-                itemCount: filteredDocs.length,
-                itemBuilder: (context, index) {
-                  final roomData = filteredDocs[index].data() as Map<String, dynamic>;
-                  final String roomId = filteredDocs[index].id;
+                    final Map<String, dynamic> usersData = Map<String, dynamic>.from(roomData['usersData'] ?? {});
+                    final Map<String, dynamic> targetData = Map<String, dynamic>.from(usersData[targetUid] ?? {'name': 'Unknown', 'avatar': ''});
+                    final String targetName = targetData['name'] ?? 'User';
+                    final String targetAvatar = targetData['avatar'] ?? '';
+                    final String lastMessage = roomData['lastMessage'] ?? 'Started a chat';
+                    final String timeAgo = controller.getTimeAgo(roomData['lastUpdated']);
 
-                  final List<dynamic> participants = roomData['participants'] ?? [];
-                  final String targetUid = participants.firstWhere((id) => id.toString() != controller.myUid.value, orElse: () => '').toString();
+                    return _buildChatCard(
+                      targetUid: targetUid, targetName: targetName, targetAvatar: targetAvatar,
+                      lastMessage: lastMessage, timeAgo: timeAgo,
+                      onTap: () {
+                        Get.to(() => ChatDetailsView(roomId: roomId, targetUid: targetUid, targetName: targetName, targetAvatar: targetAvatar), transition: Transition.rightToLeftWithFade);
+                      },
+                    );
+                  },
+                );
+              },
+            );
+          }),
 
-                  if (targetUid.isEmpty) return const SizedBox.shrink();
-
-                  final Map<String, dynamic> usersData = Map<String, dynamic>.from(roomData['usersData'] ?? {});
-                  final Map<String, dynamic> targetData = Map<String, dynamic>.from(usersData[targetUid] ?? {'name': 'Unknown', 'avatar': ''});
-
-                  final String targetName = targetData['name'] ?? 'User';
-                  final String targetAvatar = targetData['avatar'] ?? '';
-                  final String lastMessage = roomData['lastMessage'] ?? 'Started a chat';
-                  final String timeAgo = controller.getTimeAgo(roomData['lastUpdated']);
-
-                  return _buildChatCard(
-                    targetUid: targetUid, targetName: targetName, targetAvatar: targetAvatar,
-                    lastMessage: lastMessage, timeAgo: timeAgo,
-                    onTap: () {
-                      Get.to(() => ChatDetailsView(roomId: roomId, targetUid: targetUid, targetName: targetName, targetAvatar: targetAvatar), transition: Transition.rightToLeftWithFade);
-                    },
-                  );
-                },
-              );
-            },
-          );
-        }),
       ),
     );
   }

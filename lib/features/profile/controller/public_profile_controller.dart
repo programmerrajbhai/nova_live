@@ -1,16 +1,18 @@
 import 'dart:ui';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import '../../../core/services/block_service.dart'; // 🔥 BlockService ইমপোর্ট করা হলো
 
 class PublicProfileController extends GetxController {
   final String targetUserId;
+
   PublicProfileController({required this.targetUserId});
 
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
   var isLoading = true.obs;
+  var isProfileUnavailable = false.obs; // 🔥 ব্লকড প্রোফাইলের জন্য নতুন ভেরিয়েবল
   var userData = {}.obs;
   var isFollowing = false.obs;
   var followersCount = 0.obs;
@@ -28,15 +30,24 @@ class PublicProfileController extends GetxController {
       SharedPreferences prefs = await SharedPreferences.getInstance();
       currentUserId.value = prefs.getString('uid') ?? '';
 
-      // ফায়ারবেস থেকে ইউজারের ডাটা ফেচ করা
+      if (currentUserId.value.isNotEmpty) {
+        // 🔥 প্রোফাইল লোড করার আগেই মিউচুয়াল ব্লক চেক
+        bool isBlocked = await BlockService.hasBlockBetween(currentUserId.value, targetUserId);
+        if (isBlocked) {
+          isProfileUnavailable.value = true;
+          isLoading.value = false;
+          return; // ব্লক থাকলে আর ডেটা লোড করবে না
+        }
+      }
+
       DocumentSnapshot doc = await _db.collection('users').doc(targetUserId).get();
+
       if (doc.exists) {
         userData.value = doc.data() as Map<String, dynamic>;
         followersCount.value = userData['followers'] ?? 0;
         followingCount.value = userData['following'] ?? 0;
       }
 
-      // আমি তাকে ফলো করছি কিনা সেটা চেক করা
       if (currentUserId.value.isNotEmpty) {
         DocumentSnapshot followDoc = await _db
             .collection('users')
@@ -60,28 +71,22 @@ class PublicProfileController extends GetxController {
     }
 
     bool currentlyFollowing = isFollowing.value;
-
-    // UI তে সাথে সাথে আপডেট দেখানোর জন্য (Optimistic UI)
     isFollowing.value = !currentlyFollowing;
     followersCount.value += currentlyFollowing ? -1 : 1;
 
     try {
       WriteBatch batch = _db.batch();
-
       DocumentReference targetFollowersRef = _db.collection('users').doc(targetUserId).collection('followers').doc(currentUserId.value);
       DocumentReference myFollowingRef = _db.collection('users').doc(currentUserId.value).collection('following').doc(targetUserId);
-
       DocumentReference targetUserRef = _db.collection('users').doc(targetUserId);
       DocumentReference myUserRef = _db.collection('users').doc(currentUserId.value);
 
       if (currentlyFollowing) {
-        // Unfollow Logic
         batch.delete(targetFollowersRef);
         batch.delete(myFollowingRef);
         batch.update(targetUserRef, {'followers': FieldValue.increment(-1)});
         batch.update(myUserRef, {'following': FieldValue.increment(-1)});
       } else {
-        // Follow Logic
         batch.set(targetFollowersRef, {'timestamp': FieldValue.serverTimestamp()});
         batch.set(myFollowingRef, {'timestamp': FieldValue.serverTimestamp()});
         batch.update(targetUserRef, {'followers': FieldValue.increment(1)});
@@ -90,10 +95,8 @@ class PublicProfileController extends GetxController {
 
       await batch.commit();
     } catch (e) {
-      // যদি সার্ভারে এরর হয়, তাহলে আগের অবস্থায় ফেরত যাবে
-      isFollowing.value = currentlyFollowing;
       followersCount.value += currentlyFollowing ? 1 : -1;
-      Get.snackbar('Error', 'Failed to update follow status.', backgroundColor: Color(0xFFE94560), colorText: Get.theme.colorScheme.onPrimary);
+      Get.snackbar('Error', 'Failed to update follow status.', backgroundColor: const Color(0xFFE94560), colorText: Get.theme.colorScheme.onPrimary);
     }
   }
 }

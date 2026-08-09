@@ -8,6 +8,7 @@ import 'package:get/get.dart';
 import 'package:zego_uikit_signaling_plugin/zego_uikit_signaling_plugin.dart';
 
 import '../widgets/user_profile_sheet.dart';
+import '../../../core/controllers/safety_controller.dart'; // 🔥 SafetyController ইম্পোর্ট
 
 class ActiveAudioRoomView extends StatefulWidget {
   final String roomId;
@@ -44,6 +45,7 @@ class ActiveAudioRoomView extends StatefulWidget {
 class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
   final TextEditingController _reportController = TextEditingController();
   late StreamSubscription _banSubscription;
+  late StreamSubscription _roomSubscription; // 🔥 অ্যাডমিন ফোর্স ক্লোজের জন্য
   late String safeUserId;
 
   @override
@@ -76,12 +78,33 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
         );
       }
     });
+
+    // 🔥 Admin Force Close Listener
+    _roomSubscription = FirebaseFirestore.instance
+        .collection('live_audio_rooms')
+        .doc(widget.roomId)
+        .snapshots()
+        .listen((snapshot) {
+      if (!snapshot.exists && !widget.isHost) {
+        ZegoUIKit().leaveRoom();
+        Get.back();
+        Get.snackbar(
+          'Room Closed 🛑',
+          'This room was closed by moderation or host.',
+          backgroundColor: Colors.redAccent,
+          colorText: Colors.white,
+          snackPosition: SnackPosition.TOP,
+        );
+      }
+    });
   }
 
   @override
   void dispose() {
     _banSubscription.cancel();
+    _roomSubscription.cancel(); // 🔥 লিসেনার ক্যানসেল
     _reportController.dispose();
+
     if (widget.isHost && !widget.isOfficial) {
       FirebaseFirestore.instance.collection('live_audio_rooms').doc(widget.roomId).delete();
     }
@@ -155,7 +178,7 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
                       child: Container(
                         padding: const EdgeInsets.all(6),
                         decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.3), // আরও ডার্ক করা হয়েছে
+                          color: Colors.black.withOpacity(0.3),
                           borderRadius: BorderRadius.circular(30),
                           border: Border.all(color: widget.isOfficial ? Colors.amber.withOpacity(0.5) : Colors.white.withOpacity(0.2), width: 1.5),
                         ),
@@ -334,70 +357,94 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
     );
   }
 
+  // 🔥 SafetyController ব্যবহার করে সেন্ট্রাল রিপোর্ট সিস্টেম
   void _showReportDialog(BuildContext context, String currentUserId) {
+    final SafetyController safetyController = Get.put(SafetyController());
+    final List<String> reportReasons = [
+      'Nudity or sexually explicit content',
+      'Hate speech or symbols',
+      'Violence or dangerous behavior',
+      'Bullying or harassment',
+      'Scam or fraud',
+      'Spam'
+    ];
+    String selectedReason = reportReasons[0];
+
     _reportController.clear();
+
     showDialog(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          backgroundColor: const Color(0xFF2C1B3D),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title: const Row(
-            children: [
-              Icon(Icons.report_gmailerrorred, color: Colors.redAccent),
-              SizedBox(width: 10),
-              Text("Report Room", style: TextStyle(color: Colors.white, fontSize: 18)),
-            ],
-          ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text("Why are you reporting this room?", style: TextStyle(color: Colors.white70)),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _reportController,
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  hintText: "Type reason here...",
-                  hintStyle: const TextStyle(color: Colors.white38),
-                  filled: true,
-                  fillColor: Colors.black26,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+        return StatefulBuilder(
+            builder: (context, setState) {
+              return AlertDialog(
+                backgroundColor: const Color(0xFF2C1B3D),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                title: const Row(
+                  children: [
+                    Icon(Icons.report_gmailerrorred, color: Colors.redAccent),
+                    SizedBox(width: 10),
+                    Text("Report Room", style: TextStyle(color: Colors.white, fontSize: 18)),
+                  ],
                 ),
-                maxLines: 3,
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text("Cancel", style: TextStyle(color: Colors.white54)),
-            ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.redAccent,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
-              onPressed: () async {
-                if (_reportController.text.trim().isEmpty) {
-                  Get.snackbar('Error', 'Please provide a reason.', backgroundColor: Colors.redAccent, colorText: Colors.white);
-                  return;
-                }
-                Navigator.pop(context);
-                await FirebaseFirestore.instance.collection('reports').add({
-                  'reporterId': currentUserId,
-                  'reportedUserId': '',
-                  'roomId': widget.roomId,
-                  'reason': _reportController.text.trim(),
-                  'details': _reportController.text.trim(),
-                  'status': 'pending',
-                  'createdAt': FieldValue.serverTimestamp(),
-                  'source': 'room_report',
-                });
-                Get.snackbar('Reported', 'Action will be taken after review. Thank you.', backgroundColor: Colors.green.withOpacity(0.8), colorText: Colors.white);
-              },
-              child: const Text("Submit", style: TextStyle(color: Colors.white)),
-            ),
-          ],
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Text("Why are you reporting this room?", style: TextStyle(color: Colors.white70)),
+                    const SizedBox(height: 16),
+                    DropdownButtonFormField<String>(
+                      value: selectedReason,
+                      dropdownColor: const Color(0xFF2C2C2C),
+                      style: const TextStyle(color: Colors.white),
+                      decoration: InputDecoration(
+                        filled: true,
+                        fillColor: Colors.white.withOpacity(0.05),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                      ),
+                      items: reportReasons.map((reason) => DropdownMenuItem(value: reason, child: Text(reason))).toList(),
+                      onChanged: (value) => setState(() => selectedReason = value!),
+                    ),
+                    const SizedBox(height: 15),
+                    TextField(
+                      controller: _reportController,
+                      style: const TextStyle(color: Colors.white),
+                      decoration: InputDecoration(
+                        hintText: "Additional details...",
+                        hintStyle: const TextStyle(color: Colors.white38),
+                        filled: true,
+                        fillColor: Colors.black26,
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+                      ),
+                      maxLines: 3,
+                    ),
+                  ],
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text("Cancel", style: TextStyle(color: Colors.white54)),
+                  ),
+                  Obx(() => ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.redAccent,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                    onPressed: safetyController.isProcessing.value ? null : () {
+                      // 🔥 Safety Controller কল
+                      safetyController.submitReport(
+                        reportedUserId: widget.roomId.replaceAll('room_', ''), // Host ID
+                        roomId: widget.roomId,
+                        reason: selectedReason,
+                        details: _reportController.text.trim(),
+                        source: 'audio_room',
+                      );
+                    },
+                    child: safetyController.isProcessing.value
+                        ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                        : const Text("Submit", style: TextStyle(color: Colors.white)),
+                  )),
+                ],
+              );
+            }
         );
       },
     );

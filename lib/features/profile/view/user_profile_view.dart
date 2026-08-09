@@ -19,7 +19,7 @@ class UserProfileView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final PublicProfileController controller = Get.put(PublicProfileController(targetUserId: userId));
-    // 🔥 SafetyController ইনিশিয়ালাইজ করা হলো
+    // 🔥 SafetyController ইনিশিয়ালাইজ করা হলো
     final SafetyController safetyController = Get.put(SafetyController());
 
     return Scaffold(
@@ -44,6 +44,20 @@ class UserProfileView extends StatelessWidget {
       body: Obx(() {
         if (controller.isLoading.value) {
           return const Center(child: CircularProgressIndicator(color: Colors.pinkAccent));
+        }
+
+        // 🔥 ব্লক থাকলে প্রোফাইলের বদলে এরর মেসেজ দেখাবে
+        if (controller.isProfileUnavailable.value) {
+          return const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.person_off_rounded, color: Colors.white54, size: 80),
+                SizedBox(height: 15),
+                Text("This profile is unavailable.", style: TextStyle(color: Colors.white70, fontSize: 18, fontWeight: FontWeight.bold)),
+              ],
+            ),
+          );
         }
 
         var user = controller.userData;
@@ -321,7 +335,7 @@ class UserProfileView extends StatelessWidget {
                   // 🔥 Direct Firebase কল মুছে SafetyController ব্যবহার করা হলো
                   await safetyController.blockUser(targetId);
 
-                  // ব্লক করার পর ইউজার প্রোফাইল পেজ থেকে বের করে দেওয়া
+                  // ব্লক করার পর ইউজার প্রোফাইল পেজ থেকে বের করে দেওয়া
                   Future.delayed(const Duration(milliseconds: 500), () {
                     Get.back();
                   });

@@ -2,12 +2,13 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:get/get.dart';
+
+import '../../../core/services/block_service.dart'; // 🔥 BlockService ইম্পোর্ট করা হলো
 import '../view/call_view.dart';
 
 class MatchingController extends GetxController {
   var isSearching = false.obs;
   var selectedFilter = 'Global'.obs;
-
   var myUid = ''.obs;
   var myName = 'User'.obs;
   var myAvatar = ''.obs;
@@ -46,7 +47,6 @@ class MatchingController extends GetxController {
     }
   }
 
-  // 🔥 মাস্টার সলিউশন: ব্যাকগ্রাউন্ডে সেফলি চ্যাট রুম তৈরি করবে
   Future<void> _createChatRoomSafe(String targetUid) async {
     try {
       DocumentSnapshot targetDoc = await _db.collection('users').doc(targetUid).get();
@@ -68,39 +68,24 @@ class MatchingController extends GetxController {
         }, SetOptions(merge: true));
       }
     } catch (e) {
-      print("Chat room error handled safely: $e");
+      debugPrint("Chat room error handled safely: $e");
     }
   }
 
-  // 🚫 প্লে স্টোর পলিসি: ব্লক করা ইউজারদের ফিল্টার করার লজিক
+  // ==========================================
+  // 🔥 BlockService ব্যবহার করে মিউচুয়াল ব্লক চেক
+  // ==========================================
   Future<bool> canMatchWith(String targetUid) async {
     if (myUid.value.isEmpty || targetUid.isEmpty) return false;
 
-    try {
-      final iBlocked = await _db
-          .collection('users')
-          .doc(myUid.value)
-          .collection('blocked_users')
-          .doc(targetUid)
-          .get();
-
-      final theyBlockedMe = await _db
-          .collection('users')
-          .doc(targetUid)
-          .collection('blocked_users')
-          .doc(myUid.value)
-          .get();
-
-      return !iBlocked.exists && !theyBlockedMe.exists;
-    } catch (e) {
-      print("Error checking block status: $e");
-      return false;
-    }
+    // যদি ব্লক থাকে তাহলে true রিটার্ন করবে, তাই ম্যাচ করতে false রিটার্ন করব
+    bool isBlocked = await BlockService.hasBlockBetween(myUid.value, targetUid);
+    return !isBlocked;
   }
 
-  // 🔄 স্মার্ট এবং সিকিউর ম্যাচিং সিস্টেম (Race Condition Fixed)
   void startMatching() async {
     if (myUid.value.isEmpty) return;
+
     isSearching.value = true;
 
     try {
@@ -114,18 +99,16 @@ class MatchingController extends GetxController {
 
       for (var targetDoc in waitingUsers.docs) {
         String targetUid = targetDoc.id;
-
         if (targetUid == myUid.value) continue;
 
+        // 🔥 ব্লক থাকলে ম্যাচ স্কিপ করবে
         bool isSafeToMatch = await canMatchWith(targetUid);
         if (!isSafeToMatch) continue;
 
-        // 🔥 ট্রানজেকশন ব্যবহার করে রেস কন্ডিশন ফিক্স করা হয়েছে
         bool success = await _db.runTransaction((transaction) async {
           DocumentReference targetRef = _db.collection('searching_users').doc(targetUid);
           DocumentSnapshot targetSnapshot = await transaction.get(targetRef);
 
-          // ডাবল চেক: অন্য কেউ এর মধ্যে তাকে ম্যাচ করে নিয়েছে কিনা
           if (targetSnapshot.exists && targetSnapshot.get('matchedWith') == null) {
             String uniqueCallId = '${targetUid}_${myUid.value}';
             transaction.update(targetRef, {
@@ -179,7 +162,7 @@ class MatchingController extends GetxController {
       }
     } catch (e) {
       isSearching.value = false;
-      Get.snackbar('Error', 'Matching failed. Check internet.');
+      Get.snackbar('Error', 'Matching failed. Check your internet connection.');
     }
   }
 

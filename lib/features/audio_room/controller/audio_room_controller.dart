@@ -6,6 +6,7 @@ import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../core/services/block_service.dart'; // 🔥 BlockService ইমপোর্ট করা হলো
 import '../model/audio_room_model.dart';
 import '../view/active_audio_room_view.dart';
 
@@ -38,13 +39,23 @@ class AudioRoomController extends GetxController {
     }
   }
 
+  // 🔥 লাইভ রুম লিস্ট থেকে ব্লকড হোস্টদের ফিল্টার আউট করা
   Stream<List<AudioRoomModel>> getLiveRoomsStream() {
     return _db
         .collection('live_audio_rooms')
         .orderBy('createdAt', descending: true)
         .snapshots()
-        .map((snapshot) {
-      return snapshot.docs.map((doc) => AudioRoomModel.fromDocument(doc)).toList();
+        .asyncMap((snapshot) async {
+      List<AudioRoomModel> validRooms = [];
+      for (var doc in snapshot.docs) {
+        final room = AudioRoomModel.fromDocument(doc);
+        // মিউচুয়াল ব্লক চেক
+        bool isBlocked = await BlockService.hasBlockBetween(myUid.value, room.hostId);
+        if (!isBlocked) {
+          validRooms.add(room);
+        }
+      }
+      return validRooms;
     });
   }
 
@@ -146,8 +157,27 @@ class AudioRoomController extends GetxController {
   // ===============================================
   // ২. অন্য রুমে জয়েন করার লজিক (Official Room Data পাস করা)
   // ===============================================
-  void joinRoom(AudioRoomModel room) {
+  Future<void> joinRoom(AudioRoomModel room) async {
     if (safeUserId.isEmpty) return;
+
+    Get.dialog(const Center(child: CircularProgressIndicator(color: Colors.pinkAccent)), barrierDismissible: false);
+
+    // 🔥 রুমে ঢোকার আগেও ডাবল চেক করা
+    bool isBlocked = await BlockService.hasBlockBetween(myUid.value, room.hostId);
+
+    Get.back(); // লোডিং ডায়ালগ ক্লোজ
+
+    if (isBlocked) {
+      Get.snackbar(
+          'Access Denied',
+          'You cannot join this room.',
+          backgroundColor: Colors.redAccent,
+          colorText: Colors.white,
+          snackPosition: SnackPosition.BOTTOM
+      );
+      return;
+    }
+
     Get.to(() => ActiveAudioRoomView(
       roomId: room.roomId,
       roomName: room.roomName,

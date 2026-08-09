@@ -10,49 +10,73 @@ class SafetyController extends GetxController {
   // =========================================
   // 🔥 Universal Block System
   // =========================================
+// =========================================
+  //   Universal Block System (Mutual & Unfollow)
+  // =========================================
   Future<bool> blockUser(String targetUid) async {
     isProcessing.value = true;
     try {
       SharedPreferences prefs = await SharedPreferences.getInstance();
       String myUid = prefs.getString('uid') ?? '';
 
-      // ১. ইউজার লগিন করা আছে কি না চেক
-      if (myUid.isEmpty) {
-        Get.snackbar('Error', 'Authentication error. Please re-login.', backgroundColor: Colors.redAccent, colorText: Colors.white);
+      if (myUid.isEmpty || myUid == targetUid) {
+        Get.snackbar('Oops!', 'Action denied.', backgroundColor: Colors.orangeAccent, colorText: Colors.white);
         return false;
       }
 
-      // ২. নিজেকে ব্লক করার চেষ্টা করছে কি না চেক
-      if (myUid == targetUid) {
-        Get.snackbar('Oops!', 'You cannot block yourself.', backgroundColor: Colors.orangeAccent, colorText: Colors.white);
-        return false;
-      }
+      WriteBatch batch = _db.batch();
 
-      // ৩. ফায়ারবেসে ব্লক লিস্টে অ্যাড করা
-      await _db
-          .collection('users')
-          .doc(myUid)
-          .collection('blocked_users')
-          .doc(targetUid)
-          .set({
+      // ১. আমার blocked_users লিস্টে অ্যাড করা
+      DocumentReference myBlockRef = _db.collection('users').doc(myUid).collection('blocked_users').doc(targetUid);
+      batch.set(myBlockRef, {
         'blockedAt': FieldValue.serverTimestamp(),
         'blockedUserId': targetUid,
       });
 
-      // ৪. সেফ নেভিগেশন (ডায়ালগ বা বটম শিট ওপেন থাকলে শুধু সেটা কাটবে)
-      if (Get.isDialogOpen ?? false) Get.back();
-      if (Get.isBottomSheetOpen ?? false) Get.back();
+      // ২. তার blocked_by লিস্টে অ্যাড করা (যাতে তার ইনবক্স থেকেও আমি হাইড হয়ে যাই)
+      DocumentReference theirBlockedByRef = _db.collection('users').doc(targetUid).collection('blocked_by').doc(myUid);
+      batch.set(theirBlockedByRef, {
+        'blockedAt': FieldValue.serverTimestamp(),
+        'blockedByUserId': myUid,
+      });
 
+      // ৩. Follower/Following রিলেশন রিমুভ করা (Block = Unfollow)
+      DocumentReference myFollowingRef = _db.collection('users').doc(myUid).collection('following').doc(targetUid);
+      DocumentReference theirFollowersRef = _db.collection('users').doc(targetUid).collection('followers').doc(myUid);
+
+      DocumentReference theirFollowingRef = _db.collection('users').doc(targetUid).collection('following').doc(myUid);
+      DocumentReference myFollowersRef = _db.collection('users').doc(myUid).collection('followers').doc(targetUid);
+
+      // চেক করি তারা একে অপরকে ফলো করে কিনা
+      DocumentSnapshot myFollowingDoc = await myFollowingRef.get();
+      DocumentSnapshot theirFollowingDoc = await theirFollowingRef.get();
+
+      if (myFollowingDoc.exists) {
+        batch.delete(myFollowingRef);
+        batch.delete(theirFollowersRef);
+        batch.update(_db.collection('users').doc(myUid), {'following': FieldValue.increment(-1)});
+        batch.update(_db.collection('users').doc(targetUid), {'followers': FieldValue.increment(-1)});
+      }
+
+      if (theirFollowingDoc.exists) {
+        batch.delete(theirFollowingRef);
+        batch.delete(myFollowersRef);
+        batch.update(_db.collection('users').doc(targetUid), {'following': FieldValue.increment(-1)});
+        batch.update(_db.collection('users').doc(myUid), {'followers': FieldValue.increment(-1)});
+      }
+
+      // ব্যাচ এক্সিকিউট করা
+      await batch.commit();
+
+      if (Get.isBottomSheetOpen ?? false) Get.back();
       Get.snackbar(
-          'Blocked 🚫',
-          'User has been blocked and removed from your view.',
+          'Blocked',
+          'User has been blocked and unfollowed.',
           backgroundColor: Colors.redAccent,
           colorText: Colors.white,
           snackPosition: SnackPosition.BOTTOM
       );
-
-      return true; // সাকসেস
-
+      return true;
     } catch (e) {
       debugPrint('Block Error: $e');
       Get.snackbar('Error', 'Failed to block user. Try again later.', backgroundColor: Colors.redAccent, colorText: Colors.white);
@@ -61,7 +85,6 @@ class SafetyController extends GetxController {
       isProcessing.value = false;
     }
   }
-
   // =========================================
   // 🔥 Universal Report System
   // =========================================
