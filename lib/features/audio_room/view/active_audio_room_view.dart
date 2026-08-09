@@ -97,8 +97,8 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
 
         Future.delayed(const Duration(milliseconds: 300), () {
           Get.snackbar(
-            'Room Closed',
-            'This room was closed by moderation.',
+            'Room Closed 🛑',
+            'This room was closed by moderation.', // 🔥 Updated Message
             backgroundColor: Colors.redAccent,
             colorText: Colors.white,
             snackPosition: SnackPosition.TOP,
@@ -275,7 +275,6 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
                               ],
                             ),
                           ),
-                          // 🔥 FIXED: !widget.isOfficial রিমুভ করা হয়েছে
                           if (!widget.isHost)
                             const PopupMenuItem(
                               value: 'report_host',
@@ -287,7 +286,6 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
                                 ],
                               ),
                             ),
-                          // 🔥 FIXED: !widget.isOfficial রিমুভ করা হয়েছে
                           if (!widget.isHost)
                             const PopupMenuItem(
                               value: 'block_host',
@@ -307,7 +305,6 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
                 ),
               ],
             ),
-
             if (widget.isOfficial && widget.bgMusic.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 15.0),
@@ -441,7 +438,7 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
           roomId: widget.roomId,
           reason: selectedReason,
           details: _reportController.text.trim().isEmpty ? 'Reported from live audio room' : _reportController.text.trim(),
-          source: 'audio_room', // 🔥 Room Report
+          source: 'audio_room',
         );
       },
     );
@@ -495,7 +492,7 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
           roomId: widget.roomId,
           reason: selectedReason,
           details: _reportController.text.trim().isEmpty ? 'Host reported from live audio room' : _reportController.text.trim(),
-          source: 'user_profile', // 🔥 FIXED: 'audio_room' এর বদলে 'user_profile'
+          source: 'user_profile',
         );
       },
     );

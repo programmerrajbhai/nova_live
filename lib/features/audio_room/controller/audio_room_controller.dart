@@ -6,7 +6,7 @@ import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../../core/services/block_service.dart'; // 🔥 BlockService ইমপোর্ট করা হলো
+import '../../../core/services/block_service.dart';
 import '../model/audio_room_model.dart';
 import '../view/active_audio_room_view.dart';
 
@@ -126,7 +126,7 @@ class AudioRoomController extends GetxController {
         hostAvatar: myAvatar.value,
         roomName: roomName,
         roomLogo: logoUrl,
-        isOfficial: false, // সাধারণ ইউজারের রুম অফিশিয়াল নয়
+        isOfficial: false,
       );
 
       await _db.collection('live_audio_rooms').doc(roomId).set(newRoom.toMap());
@@ -144,6 +144,7 @@ class AudioRoomController extends GetxController {
         userId: safeUserId,
         userName: myName.value.isEmpty ? "Nova Host" : myName.value,
         userAvatar: myAvatar.value,
+        hostId: safeUserId, // 🔥 FIX: Host ID যুক্ত করা হলো
         isOfficial: false,
         bgImage: '',
         bgMusic: '',
@@ -155,7 +156,7 @@ class AudioRoomController extends GetxController {
   }
 
   // ===============================================
-  // ২. অন্য রুমে জয়েন করার লজিক (Official Room Data পাস করা)
+  // ২. অন্য রুমে জয়েন করার লজিক
   // ===============================================
   Future<void> joinRoom(AudioRoomModel room) async {
     if (safeUserId.isEmpty) return;
@@ -186,6 +187,7 @@ class AudioRoomController extends GetxController {
       userId: safeUserId,
       userName: myName.value.isEmpty ? "Nova Speaker" : myName.value,
       userAvatar: myAvatar.value,
+      hostId: room.hostId, // 🔥 FIX: Host ID যুক্ত করা হলো
       isOfficial: room.isOfficial,
       bgImage: room.bgImage,
       bgMusic: room.bgMusic,

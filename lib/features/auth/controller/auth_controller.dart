@@ -10,17 +10,16 @@ import 'package:firebase_storage/firebase_storage.dart';
 import '../../main_nav/view/main_nav_view.dart';
 
 class AuthController extends GetxController {
-
   final nameController = TextEditingController();
   var isAgreed = false.obs;
   var isLoading = false.obs;
   var selectedGender = 'Male'.obs;
   var dobString = ''.obs;
   var calculatedAge = 0.obs;
-
-
   var ageVerified = false.obs;
+
   static const String currentPolicyVersion = "1.0";
+
   final FirebaseStorage _storage = FirebaseStorage.instance;
   final ImagePicker _picker = ImagePicker();
   var selectedLocalImagePath = ''.obs;
@@ -32,7 +31,6 @@ class AuthController extends GetxController {
     'https://cdn-icons-png.flaticon.com/512/4140/4140037.png',
     'https://cdn-icons-png.flaticon.com/512/4140/4140047.png',
   ];
-
   var selectedAvatar = ''.obs;
 
   void toggleAgreement(bool? value) {
@@ -40,7 +38,7 @@ class AuthController extends GetxController {
   }
 
   // ==========================================
-  //   1. One Tap Login (Device-Linked Login)
+  // 1. One Tap Login (Device-Linked Login)
   // ==========================================
   Future<void> onOneTapLoginClicked() async {
     if (!isAgreed.value) {
@@ -49,16 +47,12 @@ class AuthController extends GetxController {
     }
 
     isLoading.value = true;
-
     try {
       SharedPreferences prefs = await SharedPreferences.getInstance();
 
-      // Firebase Auth UID-ই একমাত্র trusted UID।
-      // SharedPreferences-এর পুরোনো UID দিয়ে অন্য user document access করা হবে না।
       User? authUser = FirebaseAuth.instance.currentUser;
       if (authUser == null) {
-        final UserCredential credential =
-        await FirebaseAuth.instance.signInAnonymously();
+        final UserCredential credential = await FirebaseAuth.instance.signInAnonymously();
         authUser = credential.user;
       }
 
@@ -72,8 +66,7 @@ class AuthController extends GetxController {
       final String currentUid = authUser.uid;
       await prefs.setString('device_linked_uid', currentUid);
 
-      final DocumentReference<Map<String, dynamic>> userRef =
-      FirebaseFirestore.instance.collection('users').doc(currentUid);
+      final DocumentReference<Map<String, dynamic>> userRef = FirebaseFirestore.instance.collection('users').doc(currentUid);
       final DocumentSnapshot<Map<String, dynamic>> doc = await userRef.get();
 
       if (doc.exists) {
@@ -81,47 +74,37 @@ class AuthController extends GetxController {
         final bool verified = data['ageVerified'] == true;
         final String dob = (data['dob'] ?? '').toString().trim();
 
-        // পুরোনো user-এর DOB বা age verification না থাকলে Home-এ যেতে দেবে না।
         if (!verified || dob.isEmpty) {
           isLoading.value = false;
-
           nameController.text = (data['name'] ?? '').toString();
           selectedGender.value = (data['gender'] ?? 'Male').toString();
-
           final String savedAvatar = (data['avatar'] ?? '').toString();
-          selectedAvatar.value =
-          savedAvatar.isNotEmpty ? savedAvatar : defaultAvatars.first;
-
+          selectedAvatar.value = savedAvatar.isNotEmpty ? savedAvatar : defaultAvatars.first;
           selectedLocalImagePath.value = '';
           dobString.value = '';
           calculatedAge.value = 0;
           ageVerified.value = false;
 
-          Get.snackbar(
-            'Age Verification Required',
-            'Please confirm your date of birth to continue.',
-            snackPosition: SnackPosition.TOP,
-            backgroundColor: Colors.orangeAccent,
-            colorText: Colors.black,
-          );
-
+          Get.snackbar('Age Verification Required', 'Please confirm your date of birth to continue.', snackPosition: SnackPosition.TOP, backgroundColor: Colors.orangeAccent, colorText: Colors.black);
           _showProfileSetupSheet();
           return;
         }
 
+        // 🔥 Point 17: Existing ইউজারদের Terms Acceptance ডেটা আপডেট করা
+        await userRef.update({
+          'termsAccepted': true,
+          'communityAccepted': true,
+          'policyVersion': currentPolicyVersion,
+          'termsAcceptedAt': FieldValue.serverTimestamp(),
+        });
+
         await prefs.setBool('hasAccount', true);
         await prefs.setBool('isLoggedIn', true);
         await prefs.setString('uid', currentUid);
-        await prefs.setString(
-          'userName',
-          (data['name'] ?? 'Nova User').toString(),
-        );
+        await prefs.setString('userName', (data['name'] ?? 'Nova User').toString());
         await prefs.setBool('ugcAccepted', true);
         await prefs.setBool('ageVerified', true);
-        await prefs.setString(
-          'policyVersion',
-          (data['policyVersion'] ?? currentPolicyVersion).toString(),
-        );
+        await prefs.setString('policyVersion', currentPolicyVersion);
 
         isLoading.value = false;
         await _checkPermissionsAndNavigate();
@@ -138,13 +121,7 @@ class AuthController extends GetxController {
   }
 
   void _showAgreementWarning() {
-    Get.snackbar(
-        'Agreement Required ⚠️',
-        'You must agree to the Terms, Privacy Policy, Community Guidelines, and Child Safety Standards to continue.',
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.redAccent,
-        colorText: Colors.white
-    );
+    Get.snackbar('Agreement Required', 'You must agree to the Terms, Privacy Policy, Community Guidelines, and Child Safety Standards to continue.', snackPosition: SnackPosition.BOTTOM, backgroundColor: Colors.redAccent, colorText: Colors.white);
   }
 
   void _resetForm() {
@@ -160,7 +137,6 @@ class AuthController extends GetxController {
   Future<void> _pickDateOfBirth(BuildContext context) async {
     DateTime today = DateTime.now();
     DateTime initialDate = DateTime(today.year - 18, today.month, today.day);
-
     DateTime? picked = await showDatePicker(
       context: context,
       initialDate: initialDate,
@@ -169,23 +145,16 @@ class AuthController extends GetxController {
       builder: (context, child) {
         return Theme(
           data: Theme.of(context).copyWith(
-            colorScheme: const ColorScheme.dark(
-              primary: Colors.purpleAccent,
-              onPrimary: Colors.white,
-              surface: Color(0xFF1E1E1E),
-              onSurface: Colors.white,
-            ),
+            colorScheme: const ColorScheme.dark(primary: Colors.purpleAccent, onPrimary: Colors.white, surface: Color(0xFF1E1E1E), onSurface: Colors.white),
             dialogBackgroundColor: const Color(0xFF1E1E1E),
           ),
           child: child!,
         );
       },
     );
-
     if (picked != null) {
       String formattedDate = "${picked.day.toString().padLeft(2, '0')}/${picked.month.toString().padLeft(2, '0')}/${picked.year}";
       dobString.value = formattedDate;
-
       int age = today.year - picked.year;
       if (today.month < picked.month || (today.month == picked.month && today.day < picked.day)) {
         age--;
@@ -197,7 +166,6 @@ class AuthController extends GetxController {
 
   Future<void> pickCustomAvatar() async {
     bool userGaveConsent = await _showPhotoPermissionDisclosure();
-
     if (userGaveConsent) {
       try {
         final XFile? pickedFile = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 80);
@@ -222,11 +190,7 @@ class AuthController extends GetxController {
         children: [
           Icon(Icons.photo_library_rounded, size: 50, color: Colors.purpleAccent),
           SizedBox(height: 15),
-          Text(
-            "Nova Live needs access to your photo library so you can choose a custom profile picture or live room logo.",
-            textAlign: TextAlign.center,
-            style: TextStyle(color: Colors.white70, fontSize: 14, height: 1.4),
-          ),
+          Text("Nova Live needs access to your photo library so you can choose a custom profile picture or live room logo.", textAlign: TextAlign.center, style: TextStyle(color: Colors.white70, fontSize: 14, height: 1.4)),
         ],
       ),
       barrierDismissible: false,
@@ -395,16 +359,14 @@ class AuthController extends GetxController {
 
   Future<void> _validateAndJoin() async {
     String name = nameController.text.trim();
-
     if (name.isEmpty) { Get.snackbar('Error', 'Nickname cannot be empty.', backgroundColor: Colors.orangeAccent, colorText: Colors.black); return; }
     if (dobString.value.isEmpty) { Get.snackbar('Error', 'Please select your Date of Birth.', backgroundColor: Colors.orangeAccent, colorText: Colors.black); return; }
-    if (calculatedAge.value < 18) { Get.snackbar('Access Denied 🔞', 'You must be at least 18 years old.', snackPosition: SnackPosition.TOP, backgroundColor: Colors.redAccent, colorText: Colors.white); return; }
+    if (calculatedAge.value < 18) { Get.snackbar('Access Denied 🛑', 'You must be at least 18 years old.', snackPosition: SnackPosition.TOP, backgroundColor: Colors.redAccent, colorText: Colors.white); return; }
 
     isLoading.value = true;
     try {
       User? currentUser = FirebaseAuth.instance.currentUser;
       String uid;
-
       if (currentUser == null) {
         UserCredential userCredential = await FirebaseAuth.instance.signInAnonymously();
         uid = userCredential.user!.uid;
@@ -413,7 +375,6 @@ class AuthController extends GetxController {
       }
 
       final String finalAvatarToSave = await _resolveAvatarUrl(uid);
-
       int dynamicWelcomeCoins = 0;
       try {
         DocumentSnapshot configDoc = await FirebaseFirestore.instance.collection('settings').doc('app_config').get();
@@ -421,14 +382,10 @@ class AuthController extends GetxController {
           final data = configDoc.data() as Map<String, dynamic>;
           dynamicWelcomeCoins = data['welcomeCoins'] ?? 0;
         }
-      } catch (e) {
-        debugPrint("Failed to fetch welcome coins: $e");
-      }
+      } catch (e) {}
 
-      final DocumentReference<Map<String, dynamic>> userRef =
-      FirebaseFirestore.instance.collection('users').doc(uid);
-      final DocumentSnapshot<Map<String, dynamic>> existingUser =
-      await userRef.get();
+      final DocumentReference<Map<String, dynamic>> userRef = FirebaseFirestore.instance.collection('users').doc(uid);
+      final DocumentSnapshot<Map<String, dynamic>> existingUser = await userRef.get();
 
       final Map<String, dynamic> userData = <String, dynamic>{
         'uid': uid,
@@ -445,9 +402,9 @@ class AuthController extends GetxController {
         'communityAccepted': true,
         'childSafetyAccepted': true,
         'profileUpdatedAt': FieldValue.serverTimestamp(),
+        'termsAcceptedAt': FieldValue.serverTimestamp(), // 🔥 Point 17
       };
 
-      // Existing profile-এর coins, earnings, followers ইত্যাদি overwrite হবে না।
       if (!existingUser.exists) {
         userData.addAll(<String, dynamic>{
           'coins': dynamicWelcomeCoins,
@@ -465,19 +422,12 @@ class AuthController extends GetxController {
       await prefs.setString('device_linked_uid', uid);
       await prefs.setString('userName', name);
       await prefs.setBool('ugcAccepted', true);
-
       await prefs.setBool('ageVerified', true);
-      await prefs.setString(
-        'policyVersion',
-        currentPolicyVersion,
-      );
-
-
+      await prefs.setString('policyVersion', currentPolicyVersion);
 
       isLoading.value = false;
       Get.back();
       _checkPermissionsAndNavigate();
-
     } catch (e) {
       isLoading.value = false;
       Get.snackbar('Error', 'Failed to save data: $e', backgroundColor: Colors.redAccent, colorText: Colors.white);
@@ -486,40 +436,18 @@ class AuthController extends GetxController {
 
   Future<String> _resolveAvatarUrl(String uid) async {
     final String remoteAvatar = selectedAvatar.value.trim();
-
     if (selectedLocalImagePath.value.isEmpty) {
       return remoteAvatar.isNotEmpty ? remoteAvatar : defaultAvatars.first;
     }
-
     try {
       final File imageFile = File(selectedLocalImagePath.value);
-
       if (!await imageFile.exists()) {
         return remoteAvatar.isNotEmpty ? remoteAvatar : defaultAvatars.first;
       }
-
-      final Reference storageRef = _storage.ref().child(
-        'avatars/$uid/profile_${DateTime.now().millisecondsSinceEpoch}.jpg',
-      );
-
-      final TaskSnapshot snapshot = await storageRef.putFile(
-        imageFile,
-        SettableMetadata(contentType: 'image/jpeg'),
-      );
-
+      final Reference storageRef = _storage.ref().child('avatars/$uid/profile_${DateTime.now().millisecondsSinceEpoch}.jpg');
+      final TaskSnapshot snapshot = await storageRef.putFile(imageFile, SettableMetadata(contentType: 'image/jpeg'));
       return await snapshot.ref.getDownloadURL();
     } catch (e) {
-      // Firebase Storage access/rules unavailable হলেও registration fail করবে না।
-      debugPrint('Avatar upload skipped: $e');
-
-      Get.snackbar(
-        'Avatar Upload Skipped',
-        'Your profile was saved with a default avatar.',
-        snackPosition: SnackPosition.BOTTOM,
-        backgroundColor: Colors.orangeAccent,
-        colorText: Colors.black,
-      );
-
       return remoteAvatar.isNotEmpty ? remoteAvatar : defaultAvatars.first;
     }
   }
@@ -546,10 +474,7 @@ class AuthController extends GetxController {
             Text('Permissions Required', style: TextStyle(color: Colors.white, fontSize: 18)),
           ],
         ),
-        content: const Text(
-          'To connect you with random matches via live video and audio calls, Nova Live requires access to your Camera and Microphone.\n\nWe strictly protect your privacy and do not record or store your personal calls on our servers.',
-          style: TextStyle(color: Colors.white70, height: 1.5),
-        ),
+        content: const Text('To connect you with random matches via live video and audio calls, Nova Live requires access to your Camera and Microphone.\n\nWe strictly protect your privacy and do not record or store your personal calls on our servers.', style: TextStyle(color: Colors.white70, height: 1.5)),
         actions: [
           TextButton(onPressed: () { Get.back(); _goToHome(); }, child: const Text('Not Now', style: TextStyle(color: Colors.grey))),
           ElevatedButton(
@@ -580,5 +505,4 @@ class AuthController extends GetxController {
     nameController.dispose();
     super.onClose();
   }
-
 }
