@@ -61,7 +61,6 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
       safeUserId = "user_${DateTime.now().millisecondsSinceEpoch}";
     }
 
-    // ব্যান চেকিং লজিক
     _banSubscription = FirebaseFirestore.instance
         .collection('banned_users')
         .doc(widget.roomId)
@@ -82,7 +81,6 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
       }
     });
 
-    // 🔥 Admin Force Close Listener (১০০% ফিক্সড)
     _roomSubscription = FirebaseFirestore.instance
         .collection('live_audio_rooms')
         .doc(widget.roomId)
@@ -99,8 +97,8 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
 
         Future.delayed(const Duration(milliseconds: 300), () {
           Get.snackbar(
-            'Room Closed 🛑',
-            'This room was closed by moderation or host.',
+            'Room Closed',
+            'This room was closed by moderation.',
             backgroundColor: Colors.redAccent,
             colorText: Colors.white,
             snackPosition: SnackPosition.TOP,
@@ -129,9 +127,6 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
         ? ZegoUIKitPrebuiltLiveAudioRoomConfig.host()
         : ZegoUIKitPrebuiltLiveAudioRoomConfig.audience();
 
-    // ==========================================
-    // কাস্টম ব্যাকগ্রাউন্ড (Official vs Regular)
-    // ==========================================
     config.background = widget.isOfficial && widget.bgImage.isNotEmpty
         ? Container(
       decoration: BoxDecoration(
@@ -280,7 +275,8 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
                               ],
                             ),
                           ),
-                          if (!widget.isHost && !widget.isOfficial)
+                          // 🔥 FIXED: !widget.isOfficial রিমুভ করা হয়েছে
+                          if (!widget.isHost)
                             const PopupMenuItem(
                               value: 'report_host',
                               child: Row(
@@ -291,7 +287,8 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
                                 ],
                               ),
                             ),
-                          if (!widget.isHost && !widget.isOfficial)
+                          // 🔥 FIXED: !widget.isOfficial রিমুভ করা হয়েছে
+                          if (!widget.isHost)
                             const PopupMenuItem(
                               value: 'block_host',
                               child: Row(
@@ -305,15 +302,12 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
                         ],
                       ),
                     ),
-                    const SizedBox(width: 45), // Zego-এর ক্লোজ বাটনের জন্য স্পেস
+                    const SizedBox(width: 45),
                   ],
                 ),
               ],
             ),
 
-            // ==========================================
-            // অফিসিয়াল ব্যাকগ্রাউন্ড মিউজিক ইউআই ইন্ডিকেটর
-            // ==========================================
             if (widget.isOfficial && widget.bgMusic.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 15.0),
@@ -399,10 +393,6 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
     );
   }
 
-  // =====================================
-  // 🔥 Report & Block Logics
-  // =====================================
-
   void _showRoomReportDialog(BuildContext context) {
     final SafetyController safetyController = Get.find<SafetyController>();
     final reasons = ['Spam or Scam', 'Harassment', 'Nudity or Sexual Content', 'Hate Speech'];
@@ -451,7 +441,7 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
           roomId: widget.roomId,
           reason: selectedReason,
           details: _reportController.text.trim().isEmpty ? 'Reported from live audio room' : _reportController.text.trim(),
-          source: 'audio_room',
+          source: 'audio_room', // 🔥 Room Report
         );
       },
     );
@@ -505,7 +495,7 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
           roomId: widget.roomId,
           reason: selectedReason,
           details: _reportController.text.trim().isEmpty ? 'Host reported from live audio room' : _reportController.text.trim(),
-          source: 'audio_room',
+          source: 'user_profile', // 🔥 FIXED: 'audio_room' এর বদলে 'user_profile'
         );
       },
     );
