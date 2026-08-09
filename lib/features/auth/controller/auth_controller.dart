@@ -37,9 +37,6 @@ class AuthController extends GetxController {
     isAgreed.value = value ?? false;
   }
 
-  // ==========================================
-  // 1. One Tap Login (Device-Linked Login)
-  // ==========================================
   Future<void> onOneTapLoginClicked() async {
     if (!isAgreed.value) {
       _showAgreementWarning();
@@ -90,13 +87,18 @@ class AuthController extends GetxController {
           return;
         }
 
-        // 🔥 Point 17: Existing ইউজারদের Terms Acceptance ডেটা আপডেট করা
-        await userRef.update({
-          'termsAccepted': true,
-          'communityAccepted': true,
-          'policyVersion': currentPolicyVersion,
-          'termsAcceptedAt': FieldValue.serverTimestamp(),
-        });
+        // 🔥 BUG FIXED: শুধুমাত্র পলিসি আপডেট হলে বা আগে গ্রহণ না করলে তবেই ডেটাবেসে আপডেট হবে
+        final bool termsAccepted = data['termsAccepted'] == true;
+        final String acceptedVersion = (data['policyVersion'] ?? '').toString();
+
+        if (!termsAccepted || acceptedVersion != currentPolicyVersion) {
+          await userRef.update({
+            'termsAccepted': true,
+            'communityAccepted': true,
+            'policyVersion': currentPolicyVersion,
+            'termsAcceptedAt': FieldValue.serverTimestamp(),
+          });
+        }
 
         await prefs.setBool('hasAccount', true);
         await prefs.setBool('isLoggedIn', true);
@@ -402,7 +404,7 @@ class AuthController extends GetxController {
         'communityAccepted': true,
         'childSafetyAccepted': true,
         'profileUpdatedAt': FieldValue.serverTimestamp(),
-        'termsAcceptedAt': FieldValue.serverTimestamp(), // 🔥 Point 17
+        'termsAcceptedAt': FieldValue.serverTimestamp(),
       };
 
       if (!existingUser.exists) {
