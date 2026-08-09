@@ -8,10 +8,7 @@ class SafetyController extends GetxController {
   var isProcessing = false.obs;
 
   // =========================================
-  // 🔥 Universal Block System
-  // =========================================
-// =========================================
-  //   Universal Block System (Mutual & Unfollow)
+  // 🔥 Universal Block System (Mutual & Unfollow)
   // =========================================
   Future<bool> blockUser(String targetUid) async {
     isProcessing.value = true;
@@ -33,7 +30,7 @@ class SafetyController extends GetxController {
         'blockedUserId': targetUid,
       });
 
-      // ২. তার blocked_by লিস্টে অ্যাড করা (যাতে তার ইনবক্স থেকেও আমি হাইড হয়ে যাই)
+      // ২. তার blocked_by লিস্টে অ্যাড করা
       DocumentReference theirBlockedByRef = _db.collection('users').doc(targetUid).collection('blocked_by').doc(myUid);
       batch.set(theirBlockedByRef, {
         'blockedAt': FieldValue.serverTimestamp(),
@@ -47,7 +44,6 @@ class SafetyController extends GetxController {
       DocumentReference theirFollowingRef = _db.collection('users').doc(targetUid).collection('following').doc(myUid);
       DocumentReference myFollowersRef = _db.collection('users').doc(myUid).collection('followers').doc(targetUid);
 
-      // চেক করি তারা একে অপরকে ফলো করে কিনা
       DocumentSnapshot myFollowingDoc = await myFollowingRef.get();
       DocumentSnapshot theirFollowingDoc = await theirFollowingRef.get();
 
@@ -65,7 +61,6 @@ class SafetyController extends GetxController {
         batch.update(_db.collection('users').doc(myUid), {'followers': FieldValue.increment(-1)});
       }
 
-      // ব্যাচ এক্সিকিউট করা
       await batch.commit();
 
       if (Get.isBottomSheetOpen ?? false) Get.back();
@@ -85,21 +80,17 @@ class SafetyController extends GetxController {
       isProcessing.value = false;
     }
   }
-  // =========================================
-  // 🔥 Universal Report System
-  // =========================================
 
-// =========================================
-  //   Universal Report System (Standardized Schema)
   // =========================================
-
+  // 🔥 Universal Report System (Standardized Schema + Cooldown)
+  // =========================================
   Future<bool> submitReport({
     required String reportedUserId,
     String? roomId,
-    String? messageId, // 🔥 Added
+    String? messageId,
     required String reason,
     required String details,
-    required String source, // Must be: 'user_profile', 'chat', 'audio_room', or 'message'
+    required String source,
   }) async {
     isProcessing.value = true;
     try {
@@ -111,7 +102,35 @@ class SafetyController extends GetxController {
         return false;
       }
 
-      // 🔥 100% Standardized Schema matching Admin Panel
+      // 🔥 Cooldown Check (ফলস রিপোর্ট প্রোটেকশন)
+      final userDoc = await _db.collection('users').doc(myUid).get();
+      if (userDoc.exists) {
+        final userData = userDoc.data() as Map<String, dynamic>? ?? {};
+        final dynamic cooldownData = userData['reportCooldownUntil'];
+
+        if (cooldownData is Timestamp) {
+          final cooldownUntil = cooldownData.toDate();
+          if (cooldownUntil.isAfter(DateTime.now())) {
+            final remaining = cooldownUntil.difference(DateTime.now());
+            String remainingText = remaining.inDays >= 1 ? '${remaining.inDays} day(s)'
+                : remaining.inHours >= 1 ? '${remaining.inHours} hour(s)'
+                : '${remaining.inMinutes} minute(s)';
+
+            Get.snackbar(
+                'Reporting Temporarily Limited',
+                'You can submit another report after $remainingText.',
+                backgroundColor: Colors.orangeAccent,
+                colorText: Colors.black,
+                snackPosition: SnackPosition.BOTTOM
+            );
+            return false;
+          } else {
+            await _db.collection('users').doc(myUid).update({'reportCooldownUntil': FieldValue.delete()});
+          }
+        }
+      }
+
+      // 🔥 Standardized Schema
       await _db.collection('reports').add({
         'reporterId': myUid,
         'reportedUserId': reportedUserId,
@@ -122,13 +141,15 @@ class SafetyController extends GetxController {
         'source': source,
         'status': 'pending',
         'createdAt': FieldValue.serverTimestamp(),
-        'reviewedAt': null,   // 🔥 Added
-        'reviewedBy': null,   // 🔥 Added
-        'actionTaken': null,  // 🔥 Added
+        'reviewedAt': null,
+        'reviewedBy': null,
+        'actionTaken': null,
       });
 
       if (Get.isBottomSheetOpen ?? false) Get.back();
-      Get.snackbar('Report Submitted', 'Our team will review this within 24 hours.', backgroundColor: Colors.orangeAccent, colorText: Colors.black);
+      if (Get.isDialogOpen ?? false) Get.back();
+
+      Get.snackbar('Report Submitted', 'Our team will review this within 24 hours.', backgroundColor: Colors.orangeAccent, colorText: Colors.black, snackPosition: SnackPosition.BOTTOM);
       return true;
     } catch (e) {
       Get.snackbar('Error', 'Failed to submit report.', backgroundColor: Colors.redAccent, colorText: Colors.white);
@@ -137,6 +158,4 @@ class SafetyController extends GetxController {
       isProcessing.value = false;
     }
   }
-
-
 }

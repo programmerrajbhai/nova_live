@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:zego_uikit/zego_uikit.dart';
 
 import '../../profile/controller/profile_controller.dart';
-import '../../wallet/controller/wallet_controller.dart'; // 🔥 Wallet Controller অ্যাড করা হলো
+import '../../wallet/controller/wallet_controller.dart';
 
 class ActiveRoomController extends GetxController {
   var isMuted = true.obs;
@@ -12,7 +12,7 @@ class ActiveRoomController extends GetxController {
   Rx<Color> currentGiftColor = Rx<Color>(Colors.pinkAccent);
 
   final ProfileController profileController = Get.put(ProfileController());
-  final WalletController walletController = Get.put(WalletController()); // 🔥 Wallet Controller ইনিশিয়ালাইজ করা হলো
+  final WalletController walletController = Get.put(WalletController());
 
   void toggleMute() {
     isMuted.value = !isMuted.value;
@@ -23,9 +23,7 @@ class ActiveRoomController extends GetxController {
     Get.back();
   }
 
-  // 🔥 ফাংশনটি async করা হলো কারণ deductCoins এখন ডাটাবেসে রিয়েলটাইম আপডেট করে
   Future<void> sendGift(String giftName, int cost, IconData icon, Color color) async {
-    // 🔥 profileController এর বদলে walletController ব্যবহার করা হলো
     bool isSuccess = await walletController.deductCoins(cost);
 
     if (isSuccess) {
@@ -35,7 +33,7 @@ class ActiveRoomController extends GetxController {
 
       Get.snackbar(
         'Gift Sent! 🎁',
-        'Remaining coins: ${walletController.myCoins.value}', // 🔥 walletController থেকে কয়েন দেখানো হলো
+        'Remaining coins: ${walletController.myCoins.value}',
         snackPosition: SnackPosition.TOP,
         backgroundColor: Colors.black87.withOpacity(0.8),
         colorText: Colors.white,
@@ -46,8 +44,6 @@ class ActiveRoomController extends GetxController {
         showGiftAnimation.value = false;
       });
     } else {
-      // WalletController থেকেও একটি Error Snackbar আসবে, তাই এটি চাইলে মুছেও দিতে পারেন।
-      // তবে নির্দিষ্ট গিফটের নাম দেখানোর জন্য এটি রাখা হলো।
       Get.snackbar(
         'Insufficient Coins 🚫',
         'Need $cost coins for $giftName.',
