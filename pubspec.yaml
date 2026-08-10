@@ -61,6 +61,9 @@ dependencies:
   zego_uikit_signaling_plugin: ^2.8.21
 
 
+
+  cloud_functions:
+
   # monitize
 
     # login with google

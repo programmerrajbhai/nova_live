@@ -2,7 +2,7 @@ import 'dart:ui';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:get/get.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../../../core/services/block_service.dart'; // 🔥 BlockService ইমপোর্ট করা হলো
+import '../../../core/services/block_service.dart';
 
 class PublicProfileController extends GetxController {
   final String targetUserId;
@@ -12,8 +12,9 @@ class PublicProfileController extends GetxController {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
 
   var isLoading = true.obs;
-  var isProfileUnavailable = false.obs; // 🔥 ব্লকড প্রোফাইলের জন্য নতুন ভেরিয়েবল
+  var isProfileUnavailable = false.obs;
   var userData = {}.obs;
+
   var isFollowing = false.obs;
   var followersCount = 0.obs;
   var followingCount = 0.obs;
@@ -25,27 +26,38 @@ class PublicProfileController extends GetxController {
     _loadProfile();
   }
 
+  // 🔥 ডেটাবেস ক্র্যাশ ঠেকানোর জন্য সেফ পার্সার
+  int _parseCount(dynamic value) {
+    if (value == null) return 0;
+    if (value is int) return value;
+    if (value is double) return value.toInt();
+    if (value is String) return int.tryParse(value) ?? 0;
+    if (value is List) return value.length;
+    return 0;
+  }
+
   Future<void> _loadProfile() async {
     try {
       SharedPreferences prefs = await SharedPreferences.getInstance();
       currentUserId.value = prefs.getString('uid') ?? '';
 
       if (currentUserId.value.isNotEmpty) {
-        // 🔥 প্রোফাইল লোড করার আগেই মিউচুয়াল ব্লক চেক
         bool isBlocked = await BlockService.hasBlockBetween(currentUserId.value, targetUserId);
         if (isBlocked) {
           isProfileUnavailable.value = true;
           isLoading.value = false;
-          return; // ব্লক থাকলে আর ডেটা লোড করবে না
+          return;
         }
       }
 
       DocumentSnapshot doc = await _db.collection('users').doc(targetUserId).get();
+      if (doc.exists && doc.data() != null) {
+        final data = doc.data() as Map<String, dynamic>;
+        userData.value = data;
 
-      if (doc.exists) {
-        userData.value = doc.data() as Map<String, dynamic>;
-        followersCount.value = userData['followers'] ?? 0;
-        followingCount.value = userData['following'] ?? 0;
+        // 🔥 BUG FIXED: সেফ কাউন্ট পার্সিং
+        followersCount.value = _parseCount(data['followers']);
+        followingCount.value = _parseCount(data['following']);
       }
 
       if (currentUserId.value.isNotEmpty) {
@@ -72,10 +84,13 @@ class PublicProfileController extends GetxController {
 
     bool currentlyFollowing = isFollowing.value;
     isFollowing.value = !currentlyFollowing;
+
+    // UI তে ইনস্ট্যান্ট আপডেটের জন্য
     followersCount.value += currentlyFollowing ? -1 : 1;
 
     try {
       WriteBatch batch = _db.batch();
+
       DocumentReference targetFollowersRef = _db.collection('users').doc(targetUserId).collection('followers').doc(currentUserId.value);
       DocumentReference myFollowingRef = _db.collection('users').doc(currentUserId.value).collection('following').doc(targetUserId);
       DocumentReference targetUserRef = _db.collection('users').doc(targetUserId);
@@ -95,7 +110,9 @@ class PublicProfileController extends GetxController {
 
       await batch.commit();
     } catch (e) {
+      // ফেইল করলে UI আগের অবস্থায় নিয়ে যাবে
       followersCount.value += currentlyFollowing ? 1 : -1;
+      isFollowing.value = currentlyFollowing;
       Get.snackbar('Error', 'Failed to update follow status.', backgroundColor: const Color(0xFFE94560), colorText: Get.theme.colorScheme.onPrimary);
     }
   }

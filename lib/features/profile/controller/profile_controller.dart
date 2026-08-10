@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:firebase_storage/firebase_storage.dart'; // 🔥 Firebase Storage Import
+import 'package:firebase_storage/firebase_storage.dart';
 
 import '../../auth/view/login_view.dart';
 import '../../auth/controller/auth_controller.dart';
@@ -13,13 +13,11 @@ class ProfileController extends GetxController {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   var myUid = ''.obs;
 
-  // Basic Info
   var userName = 'Loading...'.obs;
   var userAvatar = ''.obs;
   var userBio = 'Hello! I am using Nova Live.'.obs;
   var userLevel = 1.obs;
 
-  // Social Stats
   var followersCount = 0.obs;
   var followingCount = 0.obs;
   var receivedDiamonds = 0.obs;
@@ -40,20 +38,37 @@ class ProfileController extends GetxController {
     }
   }
 
+  // 🔥 ডেটাবেস থেকে যেকোনো টাইপের ডেটা আসুক না কেন, এটি ক্র্যাশ করা ঠেকাবে
+  int _parseCount(dynamic value) {
+    if (value == null) return 0;
+    if (value is int) return value;
+    if (value is double) return value.toInt();
+    if (value is String) return int.tryParse(value) ?? 0;
+    if (value is List) return value.length; // যদি ভুল করে অ্যারে সেভ হয়ে থাকে, তবে তার সাইজ দেখাবে
+    return 0;
+  }
+
   void fetchUserRealData() {
     isProcessing.value = true;
     try {
       if (myUid.value.isNotEmpty) {
         _db.collection('users').doc(myUid.value).snapshots().listen((doc) {
-          if (doc.exists) {
-            userName.value = doc['name'] ?? 'Nova User';
-            userAvatar.value = doc['avatar'] ?? '';
-            userBio.value = doc['bio'] ?? 'Hello! I am using Nova Live.';
-            userLevel.value = doc['level'] ?? 1;
-            receivedDiamonds.value = doc['receivedDiamonds'] ?? 0;
-            followersCount.value = doc['followers'] ?? 0;
-            followingCount.value = doc['following'] ?? 0;
+          if (doc.exists && doc.data() != null) {
+            final data = doc.data() as Map<String, dynamic>;
+
+            userName.value = data['name'] ?? 'Nova User';
+            userAvatar.value = data['avatar'] ?? '';
+            userBio.value = data['bio'] ?? 'Hello! I am using Nova Live.';
+
+            userLevel.value = _parseCount(data['level']) == 0 ? 1 : _parseCount(data['level']);
+            receivedDiamonds.value = _parseCount(data['receivedDiamonds']);
+
+            // 🔥 BUG FIXED: এখন আর টাইপ এরর খেয়ে কাউন্টার ক্র্যাশ করবে না
+            followersCount.value = _parseCount(data['followers']);
+            followingCount.value = _parseCount(data['following']);
           }
+        }, onError: (e) {
+          debugPrint("Snapshot Error: $e");
         });
       }
     } catch (e) {
@@ -63,9 +78,6 @@ class ProfileController extends GetxController {
     }
   }
 
-  // =========================================
-  // ⚙️ Core Profile Operations
-  // =========================================
   Future<void> updateProfileDetails(String newName, String newBio) async {
     if (newName.isEmpty) {
       Get.snackbar('Error', 'Name cannot be empty.', backgroundColor: Colors.redAccent, colorText: Colors.white);
@@ -98,18 +110,13 @@ class ProfileController extends GetxController {
       }
     }
 
-    // ১. ক্লিয়ার করার আগে ডিভাইস লিংকড আইডিটি সেভ করে রাখছি
     String savedDeviceUid = prefs.getString('device_linked_uid') ?? '';
-
-    // ২. অ্যাপের সব লোকাল ডেটা মুছে দিচ্ছি
     await prefs.clear();
 
-    // ৩. ডিভাইস লিংকড আইডিটি পুনরায় সেট করে দিচ্ছি (যাতে One Tap Login মনে রাখে)
     if (savedDeviceUid.isNotEmpty) {
       await prefs.setString('device_linked_uid', savedDeviceUid);
     }
 
-    // ৪. শুধুমাত্র গুগল ইউজারদের সাইনআউট করবো। Anonymous ইউজারদের সেশন রেখে দেবো।
     User? currentUser = _auth.currentUser;
     if (currentUser != null && !currentUser.isAnonymous) {
       await _auth.signOut();
@@ -122,8 +129,9 @@ class ProfileController extends GetxController {
     Get.offAll(() => LoginView(), transition: Transition.fadeIn);
     isProcessing.value = false;
   }
+
   // =========================================
-  // 🛑 100% COMPLETE ACCOUNT DELETION FLOW
+  // 🛑 COMPLETE ACCOUNT DELETION FLOW (Client-Side)
   // =========================================
   Future<void> deleteUserAccount() async {
     String uid = myUid.value;
@@ -143,22 +151,21 @@ class ProfileController extends GetxController {
       WriteBatch batch = _db.batch();
       int operationCount = 0;
 
-      // 🔥 Batch Limit Handler (প্রতি ৪৫০ টি অপারেশনে একবার ফায়ারবেসে কমিট করবে)
       Future<void> commitBatchIfNeeded() async {
         if (operationCount >= 450) {
           await batch.commit();
-          batch = _db.batch(); // নতুন ব্যাচ শুরু
+          batch = _db.batch();
           operationCount = 0;
         }
       }
 
-      // 🧹 ১. Matchmaking/Searching Data ডিলিট
+      // 🧹 ১. Matchmaking/Searching Data
       DocumentReference searchRef = _db.collection('searching_users').doc(uid);
       batch.delete(searchRef);
       operationCount++;
       await commitBatchIfNeeded();
 
-      // 🧹 ২. Blocked Users Subcollection ডিলিট
+      // 🧹 ২. Blocked Users Subcollection
       QuerySnapshot blockedDocs = await _db.collection('users').doc(uid).collection('blocked_users').get();
       for (var doc in blockedDocs.docs) {
         batch.delete(doc.reference);
@@ -180,51 +187,52 @@ class ProfileController extends GetxController {
         await commitBatchIfNeeded();
       }
 
-      // 🧹 ৪. Followers/Following Cleanup (অন্যদের লিস্ট থেকে এই আইডি রিমুভ)
-      QuerySnapshot followingMe = await _db.collection('users').where('followers', arrayContains: uid).get();
-      for (var doc in followingMe.docs) {
-        batch.update(doc.reference, {'followers': FieldValue.arrayRemove([uid])});
-        operationCount++;
-        await commitBatchIfNeeded();
-      }
-      QuerySnapshot followedByMe = await _db.collection('users').where('following', arrayContains: uid).get();
-      for (var doc in followedByMe.docs) {
-        batch.update(doc.reference, {'following': FieldValue.arrayRemove([uid])});
-        operationCount++;
+      // 🧹 ৪. Followers/Following Cleanup
+      QuerySnapshot myFollowersDocs = await _db.collection('users').doc(uid).collection('followers').get();
+      for (var doc in myFollowersDocs.docs) {
+        String targetId = doc.id;
+        batch.delete(_db.collection('users').doc(targetId).collection('following').doc(uid));
+        batch.update(_db.collection('users').doc(targetId), {'following': FieldValue.increment(-1)});
+        operationCount += 2;
         await commitBatchIfNeeded();
       }
 
-      // 🧹 ৫. Chat Rooms & Messages Cleanup (Orphan Data রিমুভ)
+      QuerySnapshot myFollowingDocs = await _db.collection('users').doc(uid).collection('following').get();
+      for (var doc in myFollowingDocs.docs) {
+        String targetId = doc.id;
+        batch.delete(_db.collection('users').doc(targetId).collection('followers').doc(uid));
+        batch.update(_db.collection('users').doc(targetId), {'followers': FieldValue.increment(-1)});
+        operationCount += 2;
+        await commitBatchIfNeeded();
+      }
+
+      // 🧹 ৫. Chat Rooms & Messages
       QuerySnapshot chats = await _db.collection('chat_rooms').where('participants', arrayContains: uid).get();
       for (var roomDoc in chats.docs) {
-        // আগে চ্যাট রুমের ভেতরের সব মেসেজ সাব-কালেকশন ডিলিট করতে হবে
         QuerySnapshot messages = await roomDoc.reference.collection('messages').get();
         for (var msgDoc in messages.docs) {
           batch.delete(msgDoc.reference);
           operationCount++;
           await commitBatchIfNeeded();
         }
-        // এরপর মেইন চ্যাট রুম ডিলিট
         batch.delete(roomDoc.reference);
         operationCount++;
         await commitBatchIfNeeded();
       }
 
-      // 🧹 ৬. Firebase Storage Cleanup (Exact URL & Folder)
+      // 🧹 ৬. Firebase Storage Cleanup
       try {
-        // যদি ইউজারের প্রোফাইল পিকচার ফায়ারবেস স্টোরেজের হয়, তবে সরাসরি সেই লিংকের ছবিটা আগে ডিলিট করবে
         if (userAvatar.value.isNotEmpty && userAvatar.value.contains('firebasestorage.googleapis.com')) {
           final exactImageRef = FirebaseStorage.instance.refFromURL(userAvatar.value);
           await exactImageRef.delete();
         }
-        // এরপর ইউজারের ফোল্ডারে থাকা বাকি সব মুছে ফেলবে
         final storageRef = FirebaseStorage.instance.ref().child('uploads/$uid');
         final listResult = await storageRef.listAll();
         for (var item in listResult.items) {
           await item.delete();
         }
       } catch (e) {
-        debugPrint('Storage Cleanup skipped (No files found or no permission).');
+        debugPrint('Storage Cleanup skipped.');
       }
 
       // 🧹 ৭. Main User Document Delete
@@ -232,18 +240,16 @@ class ProfileController extends GetxController {
       batch.delete(userRef);
       operationCount++;
 
-      // 🔥 ফাইনাল ব্যাচ কমিট (বাকি থাকা অপারেশনগুলো রান করবে)
       if (operationCount > 0) {
         await batch.commit();
       }
 
-      // 🧹 ৮. Firebase Authentication Delete
+      // 🧹 ৮. Firebase Auth & Local Data Cleanup
       User? currentUser = _auth.currentUser;
       if (currentUser != null) {
         await currentUser.delete();
       }
 
-      // 🧹 ৯. Local App Data Cleanup
       SharedPreferences prefs = await SharedPreferences.getInstance();
       await prefs.clear();
 
@@ -251,7 +257,6 @@ class ProfileController extends GetxController {
         Get.find<AuthController>().isAgreed.value = false;
       }
 
-      // লগিন পেজে নিয়ে যাওয়া
       Get.offAll(() => LoginView(), transition: Transition.fadeIn);
       Get.snackbar('Account Deleted', 'All your data has been permanently removed from our servers.', backgroundColor: Colors.redAccent, colorText: Colors.white);
 

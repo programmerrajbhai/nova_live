@@ -1,23 +1,29 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // 🔥 FirebaseAuth Import যুক্ত করা হলো
 
 class SafetyController extends GetxController {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
+  final FirebaseAuth _auth = FirebaseAuth.instance; // 🔥 Reliable UID Source
   var isProcessing = false.obs;
 
   // =========================================
-  // 🔥 Universal Block System (Mutual & Unfollow)
+  // 🔥 Universal Block System (Mutual Block & Forward Unfollow)
   // =========================================
   Future<bool> blockUser(String targetUid) async {
     isProcessing.value = true;
     try {
-      SharedPreferences prefs = await SharedPreferences.getInstance();
-      String myUid = prefs.getString('uid') ?? '';
+      // 🔥 BUG FIXED: SharedPreferences এর বদলে FirebaseAuth থেকে ১০০% গ্যারান্টেড আইডি নেওয়া হলো
+      String myUid = _auth.currentUser?.uid ?? '';
 
-      if (myUid.isEmpty || myUid == targetUid) {
-        Get.snackbar('Oops!', 'Action denied.', backgroundColor: Colors.orangeAccent, colorText: Colors.white);
+      if (myUid.isEmpty) {
+        Get.snackbar('Error', 'User authentication failed.', backgroundColor: Colors.redAccent, colorText: Colors.white);
+        return false;
+      }
+
+      if (targetUid.isEmpty || myUid == targetUid) {
+        Get.snackbar('Oops!', 'You cannot block yourself.', backgroundColor: Colors.orangeAccent, colorText: Colors.black);
         return false;
       }
 
@@ -30,22 +36,18 @@ class SafetyController extends GetxController {
         'blockedUserId': targetUid,
       });
 
-      // ২. তার blocked_by লিস্টে অ্যাড করা
+      // ২. তার blocked_by লিস্টে অ্যাড করা (যাতে সে আমাকে আর না দেখতে পায়)
       DocumentReference theirBlockedByRef = _db.collection('users').doc(targetUid).collection('blocked_by').doc(myUid);
       batch.set(theirBlockedByRef, {
         'blockedAt': FieldValue.serverTimestamp(),
         'blockedByUserId': myUid,
       });
 
-      // ৩. Follower/Following রিলেশন রিমুভ করা (Block = Unfollow)
+      // ৩. Forward Unfollow (আমি তাকে আনফলো করছি) - ফায়ারবেস রুলসে এটি অ্যালাউড
       DocumentReference myFollowingRef = _db.collection('users').doc(myUid).collection('following').doc(targetUid);
       DocumentReference theirFollowersRef = _db.collection('users').doc(targetUid).collection('followers').doc(myUid);
 
-      DocumentReference theirFollowingRef = _db.collection('users').doc(targetUid).collection('following').doc(myUid);
-      DocumentReference myFollowersRef = _db.collection('users').doc(myUid).collection('followers').doc(targetUid);
-
       DocumentSnapshot myFollowingDoc = await myFollowingRef.get();
-      DocumentSnapshot theirFollowingDoc = await theirFollowingRef.get();
 
       if (myFollowingDoc.exists) {
         batch.delete(myFollowingRef);
@@ -54,19 +56,12 @@ class SafetyController extends GetxController {
         batch.update(_db.collection('users').doc(targetUid), {'followers': FieldValue.increment(-1)});
       }
 
-      if (theirFollowingDoc.exists) {
-        batch.delete(theirFollowingRef);
-        batch.delete(myFollowersRef);
-        batch.update(_db.collection('users').doc(targetUid), {'following': FieldValue.increment(-1)});
-        batch.update(_db.collection('users').doc(myUid), {'followers': FieldValue.increment(-1)});
-      }
-
       await batch.commit();
 
       if (Get.isBottomSheetOpen ?? false) Get.back();
       Get.snackbar(
           'Blocked',
-          'User has been blocked and unfollowed.',
+          'User has been blocked successfully.',
           backgroundColor: Colors.redAccent,
           colorText: Colors.white,
           snackPosition: SnackPosition.BOTTOM
@@ -82,7 +77,7 @@ class SafetyController extends GetxController {
   }
 
   // =========================================
-  // 🔥 Universal Report System (Standardized Schema + Cooldown)
+  // 🔥 Universal Report System (Standardized Schema + Cooldown Fix)
   // =========================================
   Future<bool> submitReport({
     required String reportedUserId,
@@ -94,15 +89,15 @@ class SafetyController extends GetxController {
   }) async {
     isProcessing.value = true;
     try {
-      SharedPreferences prefs = await SharedPreferences.getInstance();
-      String myUid = prefs.getString('uid') ?? '';
+      // 🔥 BUG FIXED: Reliable Auth ID
+      String myUid = _auth.currentUser?.uid ?? '';
 
       if (myUid.isEmpty || myUid == reportedUserId) {
         Get.snackbar('Error', 'Action denied.', backgroundColor: Colors.redAccent, colorText: Colors.white);
         return false;
       }
 
-      // 🔥 Cooldown Check (ফলস রিপোর্ট প্রোটেকশন)
+      // 🔥 Cooldown Check
       final userDoc = await _db.collection('users').doc(myUid).get();
       if (userDoc.exists) {
         final userData = userDoc.data() as Map<String, dynamic>? ?? {};
@@ -124,8 +119,6 @@ class SafetyController extends GetxController {
                 snackPosition: SnackPosition.BOTTOM
             );
             return false;
-          } else {
-            await _db.collection('users').doc(myUid).update({'reportCooldownUntil': FieldValue.delete()});
           }
         }
       }
@@ -149,7 +142,7 @@ class SafetyController extends GetxController {
       if (Get.isBottomSheetOpen ?? false) Get.back();
       if (Get.isDialogOpen ?? false) Get.back();
 
-      Get.snackbar('Report Submitted', 'Our team will review this within 24 hours.', backgroundColor: Colors.orangeAccent, colorText: Colors.black, snackPosition: SnackPosition.BOTTOM);
+      Get.snackbar('Report Submitted', 'Our team will review this within 24 hours.', backgroundColor: Colors.green, colorText: Colors.white, snackPosition: SnackPosition.BOTTOM);
       return true;
     } catch (e) {
       Get.snackbar('Error', 'Failed to submit report.', backgroundColor: Colors.redAccent, colorText: Colors.white);

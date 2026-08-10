@@ -4,16 +4,14 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:url_launcher/url_launcher.dart';
-
 import '../auth/view/login_view.dart';
 import '../main_nav/view/main_nav_view.dart';
 import 'maintenance_view.dart';
-import 'banned_view.dart'; // 🔥 Make sure BannedView exists in splash folder
+import 'banned_view.dart';
 
 class SplashController extends GetxController {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
-
   final String currentAppVersion = '1.0.0';
   final String playStoreUrl = 'https://play.google.com/store/apps/details?id=com.nova.live';
 
@@ -31,12 +29,10 @@ class SplashController extends GetxController {
         bool isMaintenanceMode = data['isMaintenanceMode'] ?? false;
         bool forceUpdate = data['forceUpdate'] ?? false;
         String latestVersion = data['appVersion'] ?? '1.0.0';
-
         if (isMaintenanceMode) {
           Get.offAll(() => const MaintenanceView(), transition: Transition.fadeIn);
           return;
         }
-
         if (forceUpdate && _isUpdateRequired(latestVersion, currentAppVersion)) {
           _showUpdateDialog();
           return;
@@ -52,9 +48,6 @@ class SplashController extends GetxController {
     return latest.compareTo(current) > 0;
   }
 
-  // =========================================================
-  // 🔥 Central Account Ban Guard (100% Enforced)
-  // =========================================================
   void _checkLoginStatus() async {
     await Future.delayed(const Duration(milliseconds: 300));
     SharedPreferences prefs = await SharedPreferences.getInstance();
@@ -67,19 +60,16 @@ class SplashController extends GetxController {
         if (userDoc.exists && userDoc.data() != null) {
           final data = userDoc.data() as Map<String, dynamic>;
           bool isBanned = data['isBanned'] ?? false;
-
           if (isBanned) {
             Timestamp? bannedUntil = data['bannedUntil'] as Timestamp?;
             String banType = data['banType'] ?? 'permanent';
             String banReason = data['banReason'] ?? 'Violation of policies';
 
-            // 1. Permanent Ban
             if (banType == 'permanent' || bannedUntil == null) {
               Get.offAll(() => BannedView(banReason: banReason, banType: 'permanent'));
               return;
             }
 
-            // 2. Temporary Suspension
             DateTime unbanDate = bannedUntil.toDate();
             if (unbanDate.isAfter(DateTime.now())) {
               Get.offAll(() => BannedView(
@@ -88,15 +78,8 @@ class SplashController extends GetxController {
                   unbanDate: unbanDate.toString().split('.')[0]
               ));
               return;
-            } else {
-              // 3. Automatic Unban (Time is over)
-              await _db.collection('users').doc(currentUser.uid).update({
-                'isBanned': false,
-                'bannedUntil': FieldValue.delete(),
-                'banType': FieldValue.delete(),
-                'banReason': FieldValue.delete(),
-              });
             }
+            // 🔥 BUG FIXED: অ্যাপ নিজে থেকে ডাটাবেস আপডেট করবে না। সময় পার হলে জাস্ট হোম স্ক্রিনে ঢুকতে দেবে।
           }
         }
       } catch (e) {
@@ -107,7 +90,6 @@ class SplashController extends GetxController {
       Get.offAll(() => LoginView(), transition: Transition.fadeIn);
     }
   }
-
 
   void _showUpdateDialog() {
     Get.defaultDialog(
