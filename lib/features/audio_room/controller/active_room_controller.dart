@@ -14,6 +14,9 @@ class ActiveRoomController extends GetxController {
   final ProfileController profileController = Get.put(ProfileController());
   final WalletController walletController = Get.put(WalletController());
 
+  // 🔥 ১৯ নম্বর সমস্যা ফিক্স: চ্যাটের জন্য TextEditingController অ্যাড করে ডিসপোজ করা হলো
+  final TextEditingController chatController = TextEditingController();
+
   void toggleMute() {
     isMuted.value = !isMuted.value;
     ZegoUIKit().turnMicrophoneOn(!isMuted.value);
@@ -51,5 +54,12 @@ class ActiveRoomController extends GetxController {
         colorText: Colors.white,
       );
     }
+  }
+
+  // 🔥 ১৯ নম্বর সমস্যা ফিক্স: Controller Memory Leak বন্ধ করা হলো
+  @override
+  void onClose() {
+    chatController.dispose();
+    super.onClose();
   }
 }

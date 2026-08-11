@@ -4,21 +4,17 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
-import 'package:zego_uikit/zego_uikit.dart';
-import 'package:zego_uikit_signaling_plugin/zego_uikit_signaling_plugin.dart';
 
 import 'features/splash/splash_view.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Firebase app চালুর জন্য প্রয়োজন, তাই এটি আগে initialize হবে।
+  // Firebase app চালুর জন্য প্রয়োজন, তাই এটি আগে initialize হবে।
   await Firebase.initializeApp();
 
-  // Zego plugin install সাধারণত দ্রুত হয়।
-  ZegoUIKit().installPlugins([
-    ZegoUIKitSignalingPlugin(),
-  ]);
+  // 🔥 ২১ নম্বর সমস্যা ফিক্স: ZegoUIKit().installPlugins এখান থেকে রিমুভ করা হলো।
+  // এটি ActiveAudioRoomView-তে অটোমেটিকভাবে ইনিশিয়ালাইজ হবে, ফলে ডাবল ইনিশিয়ালাইজেশন কনফ্লিক্ট হবে না।
 
   // Firebase ready হলেই UI চালু হবে।
   runApp(const MyApp());
@@ -53,5 +49,3 @@ class MyApp extends StatelessWidget {
     );
   }
 }
-
-

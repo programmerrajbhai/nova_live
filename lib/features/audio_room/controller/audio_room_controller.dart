@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -6,19 +7,24 @@ import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../../../core/services/block_service.dart';
 import '../model/audio_room_model.dart';
 import '../view/active_audio_room_view.dart';
 
 class AudioRoomController extends GetxController {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
+
   var myUid = ''.obs;
   var myName = ''.obs;
   var myAvatar = ''.obs;
-
   var isCreatingRoom = false.obs;
+
   var pickedLogoPath = ''.obs;
   XFile? pickedLogo;
+
+  // 🔥 লোকাল ব্লক লিস্ট (N+1 Problem এবং Database Overload ঠেকানোর জন্য)
+  final RxSet<String> blockedUsers = <String>{}.obs;
+  StreamSubscription? _blockedUsersSub;
+  StreamSubscription? _blockedBySub;
 
   @override
   void onInit() {
@@ -29,29 +35,45 @@ class AudioRoomController extends GetxController {
   Future<void> _loadUserData() async {
     final prefs = await SharedPreferences.getInstance();
     myUid.value = prefs.getString('uid') ?? '';
+
     if (myUid.value.isNotEmpty) {
       final doc = await _db.collection('users').doc(myUid.value).get();
-      if (doc.exists) {
+      if (doc.exists && doc.data() != null) {
         final data = doc.data() as Map<String, dynamic>;
         myName.value = data['name'] ?? 'Nova User';
         myAvatar.value = data['avatar'] ?? '';
       }
+      _listenToBlocks(); // 🔥 ব্লক লিস্ট RAM-এ লোড করা হচ্ছে
     }
   }
 
-  // 🔥 লাইভ রুম লিস্ট থেকে ব্লকড হোস্টদের ফিল্টার আউট করা
+  // 🔥 রিয়েলটাইম ব্লক লিস্ট লিসেনার
+  void _listenToBlocks() {
+    if (myUid.value.isEmpty) return;
+
+    _blockedUsersSub = _db.collection('users').doc(myUid.value).collection('blocked_users').snapshots().listen((snap) {
+      for(var doc in snap.docs) blockedUsers.add(doc.id);
+    });
+
+    _blockedBySub = _db.collection('users').doc(myUid.value).collection('blocked_by').snapshots().listen((snap) {
+      for(var doc in snap.docs) blockedUsers.add(doc.id);
+    });
+  }
+
+  // 🔥 BUG FIXED: N+1 Problem সলভড! (asyncMap এবং await বাদ দিয়ে O(1) ক্যাশ ব্যবহার করা হলো)
   Stream<List<AudioRoomModel>> getLiveRoomsStream() {
     return _db
         .collection('live_audio_rooms')
         .orderBy('createdAt', descending: true)
         .snapshots()
-        .asyncMap((snapshot) async {
+        .map((snapshot) {
+
       List<AudioRoomModel> validRooms = [];
       for (var doc in snapshot.docs) {
         final room = AudioRoomModel.fromDocument(doc);
-        // মিউচুয়াল ব্লক চেক
-        bool isBlocked = await BlockService.hasBlockBetween(myUid.value, room.hostId);
-        if (!isBlocked) {
+
+        // লোকাল RAM থেকে চেক করছে, কোনো ফায়ারবেস রিড হচ্ছে না
+        if (!blockedUsers.contains(room.hostId)) {
           validRooms.add(room);
         }
       }
@@ -65,11 +87,7 @@ class AudioRoomController extends GetxController {
   }
 
   Future<void> pickRoomLogo() async {
-    final image = await ImagePicker().pickImage(
-      source: ImageSource.gallery,
-      imageQuality: 70,
-      maxWidth: 700,
-    );
+    final image = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 70, maxWidth: 700);
     if (image != null) {
       pickedLogo = image;
       pickedLogoPath.value = image.path;
@@ -91,7 +109,6 @@ class AudioRoomController extends GetxController {
 
     isCreatingRoom.value = true;
 
-    // আগে ফায়ারবেস থেকে চেক করুন ইউজারদের রুম খোলার পারমিশন আছে কি না
     try {
       DocumentSnapshot configDoc = await _db.collection('settings').doc('room_controls').get();
       if (configDoc.exists && configDoc.data() != null) {
@@ -105,7 +122,7 @@ class AudioRoomController extends GetxController {
             colorText: Colors.white,
             duration: const Duration(seconds: 4),
           );
-          return; // এখানেই আটকে যাবে
+          return;
         }
       }
     } catch (e) {
@@ -113,41 +130,23 @@ class AudioRoomController extends GetxController {
     }
 
     final roomId = 'room_$safeUserId';
-    final roomName = customRoomName.trim().isEmpty
-        ? "${myName.value}'s Live Adda"
-        : customRoomName.trim();
+    final roomName = customRoomName.trim().isEmpty ? "${myName.value}'s Live Adda" : customRoomName.trim();
 
     try {
       final logoUrl = await _uploadLogo(roomId);
       final newRoom = AudioRoomModel(
-        roomId: roomId,
-        hostId: safeUserId,
-        hostName: myName.value.isEmpty ? 'Nova Host' : myName.value,
-        hostAvatar: myAvatar.value,
-        roomName: roomName,
-        roomLogo: logoUrl,
-        isOfficial: false,
+        roomId: roomId, hostId: safeUserId, hostName: myName.value.isEmpty ? 'Nova Host' : myName.value,
+        hostAvatar: myAvatar.value, roomName: roomName, roomLogo: logoUrl, isOfficial: false,
       );
 
       await _db.collection('live_audio_rooms').doc(roomId).set(newRoom.toMap());
+      pickedLogo = null; pickedLogoPath.value = ''; isCreatingRoom.value = false;
 
-      pickedLogo = null;
-      pickedLogoPath.value = '';
-      isCreatingRoom.value = false;
-
-      // রুমে জয়েন করানো হচ্ছে
+      // 🔥 Get.to() ব্যবহার করা হয়েছে, যাতে ব্যাক করলে অ্যাপ রিস্টার্ট না নেয় (Fixes #29)
       Get.to(() => ActiveAudioRoomView(
-        roomId: roomId,
-        roomName: roomName,
-        roomLogo: logoUrl,
-        isHost: true,
-        userId: safeUserId,
-        userName: myName.value.isEmpty ? "Nova Host" : myName.value,
-        userAvatar: myAvatar.value,
-        hostId: safeUserId, // 🔥 FIX: Host ID যুক্ত করা হলো
-        isOfficial: false,
-        bgImage: '',
-        bgMusic: '',
+        roomId: roomId, roomName: roomName, roomLogo: logoUrl, isHost: true,
+        userId: safeUserId, userName: myName.value.isEmpty ? "Nova Host" : myName.value,
+        userAvatar: myAvatar.value, hostId: safeUserId, isOfficial: false, bgImage: '', bgMusic: '',
       ));
     } catch (e) {
       isCreatingRoom.value = false;
@@ -161,36 +160,25 @@ class AudioRoomController extends GetxController {
   Future<void> joinRoom(AudioRoomModel room) async {
     if (safeUserId.isEmpty) return;
 
-    Get.dialog(const Center(child: CircularProgressIndicator(color: Colors.pinkAccent)), barrierDismissible: false);
-
-    // 🔥 রুমে ঢোকার আগেও ডাবল চেক করা
-    bool isBlocked = await BlockService.hasBlockBetween(myUid.value, room.hostId);
-
-    Get.back(); // লোডিং ডায়ালগ ক্লোজ
-
-    if (isBlocked) {
-      Get.snackbar(
-          'Access Denied',
-          'You cannot join this room.',
-          backgroundColor: Colors.redAccent,
-          colorText: Colors.white,
-          snackPosition: SnackPosition.BOTTOM
-      );
+    // 🔥 O(1) RAM Cache Check (No N+1 Issue)
+    if (blockedUsers.contains(room.hostId)) {
+      Get.snackbar('Access Denied', 'You cannot join this room.', backgroundColor: Colors.redAccent, colorText: Colors.white, snackPosition: SnackPosition.BOTTOM);
       return;
     }
 
+    // 🔥 Get.to() ব্যবহার করা হয়েছে (Fixes #29)
     Get.to(() => ActiveAudioRoomView(
-      roomId: room.roomId,
-      roomName: room.roomName,
-      roomLogo: room.roomLogo,
-      isHost: false, // ইউজার জয়েন করলে সে হোস্ট নয়
-      userId: safeUserId,
-      userName: myName.value.isEmpty ? "Nova Speaker" : myName.value,
-      userAvatar: myAvatar.value,
-      hostId: room.hostId, // 🔥 FIX: Host ID যুক্ত করা হলো
-      isOfficial: room.isOfficial,
-      bgImage: room.bgImage,
-      bgMusic: room.bgMusic,
+      roomId: room.roomId, roomName: room.roomName, roomLogo: room.roomLogo, isHost: false,
+      userId: safeUserId, userName: myName.value.isEmpty ? "Nova Speaker" : myName.value,
+      userAvatar: myAvatar.value, hostId: room.hostId, isOfficial: room.isOfficial, bgImage: room.bgImage, bgMusic: room.bgMusic,
     ));
+  }
+
+  // 🔥 মেমোরি লিক রোধ করার জন্য লিসেনার ক্যানসেল করা হলো
+  @override
+  void onClose() {
+    _blockedUsersSub?.cancel();
+    _blockedBySub?.cancel();
+    super.onClose();
   }
 }

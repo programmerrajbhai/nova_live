@@ -64,6 +64,8 @@ dependencies:
 
   cloud_functions:
 
+  cached_network_image: ^3.3.1
+
   # monitize
 
     # login with google

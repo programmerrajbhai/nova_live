@@ -5,13 +5,14 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../core/widgets/premium_background.dart';
+import '../../../core/widgets/custom_cached_avatar.dart'; // 🔥 Custom Cached Avatar Import করা হলো
 import '../controller/profile_controller.dart';
 import '../../wallet/controller/wallet_controller.dart';
 import '../../wallet/view/wallet_view.dart';
 import '../../messages/view/settings_view.dart';
 import 'edit_profile_view.dart';
 import '../../legal/view/safety_center_view.dart';
-import 'followers_following_view.dart'; // 🔥 Import added
+import 'followers_following_view.dart';
 
 class ProfileView extends StatelessWidget {
   final ProfileController controller = Get.put(ProfileController());
@@ -95,139 +96,141 @@ class ProfileView extends StatelessWidget {
             const SizedBox(width: 10),
           ],
         ),
-        body: Obx(() {
-          if (controller.isProcessing.value && controller.userName.value == 'Loading...') {
-            return const Center(child: CircularProgressIndicator(color: Colors.purpleAccent));
-          }
-          return SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-            child: Column(
-              children: [
-                Center(
-                  child: Column(
+        // 🔥 ১৩ নম্বর সমস্যা ফিক্স: পুরো বডি থেকে Obx সরিয়ে ফেলা হলো, যাতে পেজ রেন্ডার ফাস্ট হয়
+        body: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+          child: Column(
+            children: [
+              Center(
+                child: Column(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: const LinearGradient(colors: [Colors.purpleAccent, Colors.cyanAccent]),
+                        boxShadow: [BoxShadow(color: Colors.purpleAccent.withOpacity(0.5), blurRadius: 20)],
+                      ),
+                      // 🔥 ১২ নম্বর সমস্যা ফিক্স: NetworkImage এর বদলে CustomCachedAvatar ব্যবহার করা হলো
+                      child: Obx(() => CustomCachedAvatar(
+                        imageUrl: controller.userAvatar.value,
+                        radius: 50,
+                        fallbackText: controller.userName.value.isNotEmpty ? controller.userName.value : 'U',
+                      )),
+                    ),
+                    const SizedBox(height: 15),
+
+                    // 🔥 শুধুমাত্র নাম পরিবর্তন হলে এই অংশটুকু রেন্ডার হবে
+                    Obx(() => Text(controller.userName.value, style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 1.2))),
+                    const SizedBox(height: 8),
+
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 20),
+                      // 🔥 শুধুমাত্র বায়ো পরিবর্তন হলে এই অংশটুকু রেন্ডার হবে
+                      child: Obx(() => Text(controller.userBio.value, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70, fontSize: 13))),
+                    ),
+                    const SizedBox(height: 15),
+                    GestureDetector(
+                      onTap: () => Get.to(() => const EditProfileView(), transition: Transition.downToUp),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                        decoration: BoxDecoration(color: Colors.white.withOpacity(0.1), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white24)),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(FontAwesomeIcons.penToSquare, color: Colors.white, size: 14),
+                            SizedBox(width: 8),
+                            Text('Edit Profile', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 25),
+
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  // 🔥 শুধুমাত্র ফলোয়ার কাউন্ট পরিবর্তন হলে এই অংশটুকু রেন্ডার হবে
+                  Obx(() => _buildStatColumn(
+                    'Followers',
+                    controller.followersCount.value.toString(),
+                    onTap: () => Get.to(() => FollowersFollowingView(userId: controller.myUid.value, type: 'followers')),
+                  )),
+                  Obx(() => _buildStatColumn(
+                    'Following',
+                    controller.followingCount.value.toString(),
+                    onTap: () => Get.to(() => FollowersFollowingView(userId: controller.myUid.value, type: 'following')),
+                  )),
+                  Obx(() => _buildStatColumn('Level', controller.userLevel.value.toString(), icon: FontAwesomeIcons.star)),
+                ],
+              ),
+              const SizedBox(height: 30),
+
+              GestureDetector(
+                onTap: () => Get.to(() => WalletView(), transition: Transition.downToUp),
+                child: Container(
+                  padding: const EdgeInsets.all(20),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(colors: [Colors.white.withOpacity(0.1), Colors.white.withOpacity(0.05)], begin: Alignment.topLeft, end: Alignment.bottomRight),
+                    borderRadius: BorderRadius.circular(25),
+                    border: Border.all(color: Colors.purpleAccent.withOpacity(0.4), width: 1.5),
+                    boxShadow: [BoxShadow(color: Colors.purpleAccent.withOpacity(0.15), blurRadius: 20, offset: const Offset(0, 5))],
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          gradient: const LinearGradient(colors: [Colors.purpleAccent, Colors.cyanAccent]),
-                          boxShadow: [BoxShadow(color: Colors.purpleAccent.withOpacity(0.5), blurRadius: 20)],
-                        ),
-                        child: CircleAvatar(
-                          radius: 50,
-                          backgroundColor: const Color(0xFF1E1E1E),
-                          backgroundImage: controller.userAvatar.value.isNotEmpty ? NetworkImage(controller.userAvatar.value) : null,
-                          child: controller.userAvatar.value.isEmpty ? const Icon(FontAwesomeIcons.userAstronaut, size: 45, color: Colors.white) : null,
-                        ),
-                      ),
-                      const SizedBox(height: 15),
-                      Text(controller.userName.value, style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 1.2)),
-                      const SizedBox(height: 8),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                        child: Text(controller.userBio.value, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70, fontSize: 13)),
-                      ),
-                      const SizedBox(height: 15),
-                      GestureDetector(
-                        onTap: () => Get.to(() => const EditProfileView(), transition: Transition.downToUp),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-                          decoration: BoxDecoration(color: Colors.white.withOpacity(0.1), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white24)),
-                          child: const Row(
-                            mainAxisSize: MainAxisSize.min,
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text('My Wallet', style: TextStyle(color: Colors.grey, fontSize: 14)),
+                          const SizedBox(height: 5),
+                          Row(
                             children: [
-                              Icon(FontAwesomeIcons.penToSquare, color: Colors.white, size: 14),
-                              SizedBox(width: 8),
-                              Text('Edit Profile', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                              const Icon(FontAwesomeIcons.coins, color: Colors.orangeAccent, size: 28),
+                              const SizedBox(width: 10),
+                              // 🔥 শুধুমাত্র কয়েন পরিবর্তন হলে এই অংশটুকু রেন্ডার হবে
+                              Obx(() => Text('${walletController.myCoins.value}', style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold))),
                             ],
                           ),
+                        ],
+                      ),
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(colors: [Colors.purpleAccent, Colors.cyanAccent]),
+                          shape: BoxShape.circle,
+                          boxShadow: [BoxShadow(color: Colors.purpleAccent.withOpacity(0.4), blurRadius: 10, offset: const Offset(0, 3))],
                         ),
+                        child: const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white, size: 20),
                       ),
                     ],
                   ),
                 ),
-                const SizedBox(height: 25),
-                // 🔥 List link enabled here
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                  children: [
-                    _buildStatColumn(
-                      'Followers',
-                      controller.followersCount.value.toString(),
-                      onTap: () => Get.to(() => FollowersFollowingView(userId: controller.myUid.value, type: 'followers')),
-                    ),
-                    _buildStatColumn(
-                      'Following',
-                      controller.followingCount.value.toString(),
-                      onTap: () => Get.to(() => FollowersFollowingView(userId: controller.myUid.value, type: 'following')),
-                    ),
-                    _buildStatColumn('Level', controller.userLevel.value.toString(), icon: FontAwesomeIcons.star),
-                  ],
-                ),
-                const SizedBox(height: 30),
-                GestureDetector(
-                  onTap: () => Get.to(() => WalletView(), transition: Transition.downToUp),
-                  child: Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(colors: [Colors.white.withOpacity(0.1), Colors.white.withOpacity(0.05)], begin: Alignment.topLeft, end: Alignment.bottomRight),
-                      borderRadius: BorderRadius.circular(25),
-                      border: Border.all(color: Colors.purpleAccent.withOpacity(0.4), width: 1.5),
-                      boxShadow: [BoxShadow(color: Colors.purpleAccent.withOpacity(0.15), blurRadius: 20, offset: const Offset(0, 5))],
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('My Wallet', style: TextStyle(color: Colors.grey, fontSize: 14)),
-                            const SizedBox(height: 5),
-                            Row(
-                              children: [
-                                const Icon(FontAwesomeIcons.coins, color: Colors.orangeAccent, size: 28),
-                                const SizedBox(width: 10),
-                                Text('${walletController.myCoins.value}', style: const TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold)),
-                              ],
-                            ),
-                          ],
-                        ),
-                        Container(
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(colors: [Colors.purpleAccent, Colors.cyanAccent]),
-                            shape: BoxShape.circle,
-                            boxShadow: [BoxShadow(color: Colors.purpleAccent.withOpacity(0.4), blurRadius: 10, offset: const Offset(0, 3))],
-                          ),
-                          child: const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white, size: 20),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 25),
-                _buildMenuCard([
-                  _buildMenuItem(FontAwesomeIcons.shieldHeart, 'Safety Center', Colors.greenAccent, onTap: () => Get.to(() => const SafetyCenterView(), transition: Transition.rightToLeftWithFade)),
-                  _buildMenuItem(FontAwesomeIcons.userShield, 'Block & Reports', Colors.indigoAccent, onTap: () => Get.to(() => SettingsView(), transition: Transition.rightToLeftWithFade)),
-                ]),
-                const SizedBox(height: 20),
-                _buildMenuCard([
-                  _buildMenuItem(FontAwesomeIcons.rightFromBracket, 'Log Out', Colors.orangeAccent, onTap: _showLogoutDialog),
-                  _buildMenuItem(FontAwesomeIcons.trash, 'Delete Account (In-App)', Colors.redAccent, onTap: _showDeleteAccountDialog),
-                  _buildMenuItem(FontAwesomeIcons.globe, 'Delete My Data Online', Colors.blueGrey, onTap: _openWebDeletionForm),
-                ]),
-                const SizedBox(height: 30),
-                const Text('Nova Live v1.0.0', style: TextStyle(color: Colors.white38, fontSize: 12, letterSpacing: 1)),
-                const SizedBox(height: 30),
-              ],
-            ),
-          );
-        }),
+              ),
+              const SizedBox(height: 25),
+              _buildMenuCard([
+                _buildMenuItem(FontAwesomeIcons.shieldHeart, 'Safety Center', Colors.greenAccent, onTap: () => Get.to(() => const SafetyCenterView(), transition: Transition.rightToLeftWithFade)),
+                _buildMenuItem(FontAwesomeIcons.userShield, 'Block & Reports', Colors.indigoAccent, onTap: () => Get.to(() => SettingsView(), transition: Transition.rightToLeftWithFade)),
+              ]),
+              const SizedBox(height: 20),
+              _buildMenuCard([
+                _buildMenuItem(FontAwesomeIcons.rightFromBracket, 'Log Out', Colors.orangeAccent, onTap: _showLogoutDialog),
+                _buildMenuItem(FontAwesomeIcons.trash, 'Delete Account (In-App)', Colors.redAccent, onTap: _showDeleteAccountDialog),
+                _buildMenuItem(FontAwesomeIcons.globe, 'Delete My Data Online', Colors.blueGrey, onTap: _openWebDeletionForm),
+              ]),
+              const SizedBox(height: 30),
+              const Text('Nova Live v1.0.0', style: TextStyle(color: Colors.white38, fontSize: 12, letterSpacing: 1)),
+              const SizedBox(height: 30),
+            ],
+          ),
+        ),
       ),
     );
   }
 
-  // 🔥 onTap parameter added
   Widget _buildStatColumn(String label, String value, {IconData? icon, VoidCallback? onTap}) {
     return GestureDetector(
       onTap: onTap,
@@ -248,13 +251,24 @@ class ProfileView extends StatelessWidget {
   }
 
   Widget _buildMenuCard(List<Widget> children) {
-    return Container(decoration: BoxDecoration(color: Colors.white.withOpacity(0.05), borderRadius: BorderRadius.circular(20), border: Border.all(color: Colors.white.withOpacity(0.1))), child: Column(children: children));
+    return Container(
+        decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.05),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.white.withOpacity(0.1))
+        ),
+        child: Column(children: children)
+    );
   }
 
   Widget _buildMenuItem(IconData icon, String title, Color iconColor, {required VoidCallback onTap}) {
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-      leading: Container(padding: const EdgeInsets.all(10), decoration: BoxDecoration(color: iconColor.withOpacity(0.1), borderRadius: BorderRadius.circular(12)), child: Icon(icon, color: iconColor, size: 18)),
+      leading: Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(color: iconColor.withOpacity(0.1), borderRadius: BorderRadius.circular(12)),
+          child: Icon(icon, color: iconColor, size: 18)
+      ),
       title: Text(title, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w500)),
       trailing: const Icon(Icons.arrow_forward_ios, color: Colors.white38, size: 14),
       onTap: onTap,

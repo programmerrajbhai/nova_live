@@ -8,6 +8,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import '../../main_nav/view/main_nav_view.dart';
+import '../../splash/banned_view.dart'; // 🔥 Import BannedView
 
 class AuthController extends GetxController {
   final nameController = TextEditingController();
@@ -68,6 +69,22 @@ class AuthController extends GetxController {
 
       if (doc.exists) {
         final Map<String, dynamic> data = doc.data() ?? <String, dynamic>{};
+
+        // 🔥 FIX 24: Banned User Login Bypass Check
+        bool isBanned = data['isBanned'] == true;
+        Timestamp? bannedUntil = data['bannedUntil'] as Timestamp?;
+
+        if (isBanned) {
+          if (bannedUntil == null || bannedUntil.toDate().isAfter(DateTime.now())) {
+            isLoading.value = false;
+            String banReason = data['banReason'] ?? 'Violation of Terms & Policies';
+            String banType = data['banType'] ?? 'Account Suspension'; // 🔥 Fixed Missing Arguments
+
+            Get.offAll(() => BannedView(banReason: banReason, banType: banType));
+            return; // 🛑 ব্যানড ইউজার হলে আর সামনে এগোবে না
+          }
+        }
+
         final bool verified = data['ageVerified'] == true;
         final String dob = (data['dob'] ?? '').toString().trim();
 
@@ -87,7 +104,6 @@ class AuthController extends GetxController {
           return;
         }
 
-        // 🔥 BUG FIXED: শুধুমাত্র পলিসি আপডেট হলে বা আগে গ্রহণ না করলে তবেই ডেটাবেসে আপডেট হবে
         final bool termsAccepted = data['termsAccepted'] == true;
         final String acceptedVersion = (data['policyVersion'] ?? '').toString();
 

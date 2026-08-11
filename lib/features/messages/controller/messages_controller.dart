@@ -77,7 +77,7 @@ class MessagesController extends GetxController {
     }
   }
 
-  // 🔥 BUG FIXED: N+1 Problem সলভড! asyncMap এবং await BlockService সরিয়ে ফেলা হয়েছে।
+  // 🔥 BUG FIXED: N+1 Problem + Realtime Search Filtering (Fixes #28)
   Stream<List<QueryDocumentSnapshot>> getInboxStream() {
     return _db
         .collection('chat_rooms')
@@ -95,9 +95,21 @@ class MessagesController extends GetxController {
         if (targetUid.isEmpty) continue;
 
         // লোকাল RAM থেকে চেক করছে, কোনো ফায়ারবেস ডেটাবেস কল হচ্ছে না!
-        if (!blockedUsers.contains(targetUid)) {
-          validDocs.add(doc);
+        if (blockedUsers.contains(targetUid)) continue;
+
+        // 🔥 Search Filter Logic
+        if (searchQuery.value.isNotEmpty) {
+          final usersData = roomData['usersData'] as Map<String, dynamic>? ?? {};
+          final targetData = usersData[targetUid] as Map<String, dynamic>? ?? {};
+          final targetName = (targetData['name'] ?? '').toString().toLowerCase();
+
+          // যদি ইউজারের নামের সাথে সার্চ কুয়েরি না মেলে, তাহলে লিস্টে দেখাবে না
+          if (!targetName.contains(searchQuery.value.toLowerCase())) {
+            continue;
+          }
         }
+
+        validDocs.add(doc);
       }
       return validDocs;
     });
@@ -174,7 +186,6 @@ class MessagesController extends GetxController {
     }
   }
 
-  // 🔥 BUG FIXED: Memory Leak ঠেকানোর জন্য লিসেনার ক্যানসেল করা হলো
   @override
   void onClose() {
     _blockedUsersSubscription?.cancel();

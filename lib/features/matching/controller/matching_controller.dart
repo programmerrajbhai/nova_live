@@ -3,7 +3,6 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:get/get.dart';
 import 'package:flutter/foundation.dart';
-import '../../../core/services/block_service.dart'; // 🔥 BlockService ইম্পোর্ট করা হলো
 import '../view/call_view.dart';
 
 class MatchingController extends GetxController {
@@ -14,7 +13,13 @@ class MatchingController extends GetxController {
   var myAvatar = ''.obs;
 
   StreamSubscription? _matchSubscription;
+  StreamSubscription? _blockedUsersSub;
+  StreamSubscription? _blockedBySub;
+
   final FirebaseFirestore _db = FirebaseFirestore.instance;
+
+  // 🔥 লোকাল ব্লক লিস্ট (বারবার ডেটাবেস কল ঠেকানোর জন্য)
+  final RxSet<String> blockedUsers = <String>{}.obs;
 
   @override
   void onInit() {
@@ -44,7 +49,21 @@ class MatchingController extends GetxController {
         myName.value = doc['name'] ?? 'Nova User';
         myAvatar.value = doc['avatar'] ?? '';
       }
+      _listenToBlocks(); // 🔥 ব্লক লিস্ট RAM-এ লোড করা হচ্ছে
     }
+  }
+
+  // 🔥 রিয়েলটাইম ব্লক লিস্ট লিসেনার (No N+1 Issue)
+  void _listenToBlocks() {
+    if (myUid.value.isEmpty) return;
+
+    _blockedUsersSub = _db.collection('users').doc(myUid.value).collection('blocked_users').snapshots().listen((snap) {
+      for(var doc in snap.docs) blockedUsers.add(doc.id);
+    });
+
+    _blockedBySub = _db.collection('users').doc(myUid.value).collection('blocked_by').snapshots().listen((snap) {
+      for(var doc in snap.docs) blockedUsers.add(doc.id);
+    });
   }
 
   Future<void> _createChatRoomSafe(String targetUid) async {
@@ -72,20 +91,8 @@ class MatchingController extends GetxController {
     }
   }
 
-  // ==========================================
-  // 🔥 BlockService ব্যবহার করে মিউচুয়াল ব্লক চেক
-  // ==========================================
-  Future<bool> canMatchWith(String targetUid) async {
-    if (myUid.value.isEmpty || targetUid.isEmpty) return false;
-
-    // যদি ব্লক থাকে তাহলে true রিটার্ন করবে, তাই ম্যাচ করতে false রিটার্ন করব
-    bool isBlocked = await BlockService.hasBlockBetween(myUid.value, targetUid);
-    return !isBlocked;
-  }
-
   void startMatching() async {
     if (myUid.value.isEmpty) return;
-
     isSearching.value = true;
 
     try {
@@ -101,9 +108,8 @@ class MatchingController extends GetxController {
         String targetUid = targetDoc.id;
         if (targetUid == myUid.value) continue;
 
-        // 🔥 ব্লক থাকলে ম্যাচ স্কিপ করবে
-        bool isSafeToMatch = await canMatchWith(targetUid);
-        if (!isSafeToMatch) continue;
+        // 🔥 O(1) Local Cache Check (ডেটাবেস ওভারলোড হবে না, ম্যাচিং সুপার ফাস্ট হবে)
+        if (blockedUsers.contains(targetUid)) continue;
 
         bool success = await _db.runTransaction((transaction) async {
           DocumentReference targetRef = _db.collection('searching_users').doc(targetUid);
@@ -174,9 +180,12 @@ class MatchingController extends GetxController {
     }
   }
 
+  // 🔥 মেমোরি লিক রোধ করার জন্য সবগুলো লিসেনার ক্যানসেল করা হলো
   @override
   void onClose() {
     stopMatching();
+    _blockedUsersSub?.cancel();
+    _blockedBySub?.cancel();
     super.onClose();
   }
 }

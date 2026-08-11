@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 import '../../../core/widgets/premium_background.dart';
+import '../../../core/controllers/safety_controller.dart'; // 🔥 SafetyController Import করা হলো
 import '../../profile/view/user_profile_view.dart';
 import '../controller/messages_controller.dart';
 
@@ -21,6 +22,7 @@ class ChatDetailsView extends StatelessWidget {
   });
 
   final MessagesController controller = Get.find<MessagesController>();
+  final SafetyController safetyController = Get.put(SafetyController()); // 🔥 Controller Initialize
 
   @override
   Widget build(BuildContext context) {
@@ -80,10 +82,14 @@ class ChatDetailsView extends StatelessWidget {
             ],
           ),
           actions: [
+            // 🔥 Fixes #31: Report and Block Menu functionality added!
             Container(
               margin: const EdgeInsets.only(right: 14),
               decoration: BoxDecoration(color: Colors.white.withOpacity(0.08), shape: BoxShape.circle, border: Border.all(color: Colors.white.withOpacity(0.10))),
-              child: IconButton(onPressed: () {}, icon: const Icon(Icons.more_vert_rounded, color: Colors.white, size: 22)),
+              child: IconButton(
+                  onPressed: () => _showChatOptionsBottomSheet(context),
+                  icon: const Icon(Icons.more_vert_rounded, color: Colors.white, size: 22)
+              ),
             ),
           ],
         ),
@@ -218,6 +224,121 @@ class ChatDetailsView extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+
+  // ===============================================
+  // 🔥 Thre-dot Menu Actions (Report & Block)
+  // ===============================================
+  void _showChatOptionsBottomSheet(BuildContext context) {
+    showModalBottomSheet(
+        context: context,
+        backgroundColor: const Color(0xFF1A0B2E),
+        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(25))),
+        builder: (context) {
+          return SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(margin: const EdgeInsets.only(top: 10, bottom: 20), width: 40, height: 5, decoration: BoxDecoration(color: Colors.white30, borderRadius: BorderRadius.circular(10))),
+                ListTile(
+                  leading: const Icon(Icons.report_problem_rounded, color: Colors.orangeAccent),
+                  title: const Text('Report User', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600)),
+                  subtitle: const Text('Report inappropriate messages or behavior', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                  onTap: () {
+                    Get.back();
+                    _showReportDialog(context);
+                  },
+                ),
+                const Divider(color: Colors.white10),
+                ListTile(
+                  leading: const Icon(Icons.block_rounded, color: Colors.redAccent),
+                  title: const Text('Block User', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600)),
+                  subtitle: const Text('You will no longer receive their messages', style: TextStyle(color: Colors.white54, fontSize: 12)),
+                  onTap: () {
+                    Get.back();
+                    _showBlockDialog(context);
+                  },
+                ),
+                const SizedBox(height: 15),
+              ],
+            ),
+          );
+        }
+    );
+  }
+
+  void _showReportDialog(BuildContext context) {
+    final List<String> reportReasons = ['Spam or Unsolicited', 'Harassment or Bullying', 'Inappropriate Content', 'Scam or Fraud'];
+    String selectedReason = reportReasons[0];
+    showDialog(
+        context: context,
+        builder: (context) {
+          return StatefulBuilder(
+              builder: (context, setState) {
+                return AlertDialog(
+                  backgroundColor: const Color(0xFF1A0B2E),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: Colors.white.withOpacity(0.1))),
+                  title: const Text('Report User', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  content: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: reportReasons.map((reason) {
+                        return RadioListTile<String>(
+                          activeColor: Colors.pinkAccent,
+                          title: Text(reason, style: const TextStyle(color: Colors.white70, fontSize: 14)),
+                          value: reason,
+                          groupValue: selectedReason,
+                          onChanged: (value) => setState(() { selectedReason = value!; }),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                  actions: [
+                    TextButton(child: const Text('Cancel', style: TextStyle(color: Colors.white54)), onPressed: () => Get.back()),
+                    Obx(() => ElevatedButton(
+                      style: ElevatedButton.styleFrom(backgroundColor: Colors.pinkAccent, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                      onPressed: safetyController.isProcessing.value ? null : () {
+                        safetyController.submitReport(
+                          reportedUserId: targetUid,
+                          roomId: roomId,
+                          reason: selectedReason,
+                          details: 'Reported directly from Chat Details View',
+                          source: 'chat',
+                        );
+                      },
+                      child: safetyController.isProcessing.value ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Text('Submit Report', style: TextStyle(color: Colors.white)),
+                    )),
+                  ],
+                );
+              }
+          );
+        }
+    );
+  }
+
+  void _showBlockDialog(BuildContext context) {
+    showDialog(
+        context: context,
+        builder: (context) {
+          return AlertDialog(
+            backgroundColor: const Color(0xFF1A0B2E),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: Colors.redAccent.withOpacity(0.5))),
+            title: const Text('Block User?', style: TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold)),
+            content: Text('Are you sure you want to block $targetName? You will no longer receive their messages and they will be removed from your lists.', style: const TextStyle(color: Colors.white70)),
+            actions: [
+              TextButton(child: const Text('Cancel', style: TextStyle(color: Colors.white54)), onPressed: () => Get.back()),
+              Obx(() => ElevatedButton(
+                style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+                onPressed: safetyController.isProcessing.value ? null : () async {
+                  await safetyController.blockUser(targetUid, targetName: targetName);
+                  Future.delayed(const Duration(milliseconds: 500), () => Get.back());
+                },
+                child: safetyController.isProcessing.value ? const SizedBox(height: 16, width: 16, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : const Text('Block', style: TextStyle(color: Colors.white)),
+              )),
+            ],
+          );
+        }
     );
   }
 }
