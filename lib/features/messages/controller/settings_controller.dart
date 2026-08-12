@@ -3,6 +3,8 @@ import 'package:get/get.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import '../../../core/controllers/safety_controller.dart'; // 🔥 SafetyController ইম্পোর্ট করা হলো
+
 class SettingsController extends GetxController {
   final FirebaseFirestore _db = FirebaseFirestore.instance;
   var myUid = ''.obs;
@@ -26,33 +28,20 @@ class SettingsController extends GetxController {
         .snapshots();
   }
 
-  // 🚩 Reported Users Stream (Index Error এড়াতে orderBy বাদ দিয়ে লোকাল সর্ট করা হবে)
+  // 🚩 Reported Users Stream (Index Error এড়াতে orderBy বাদ দিয়ে লোকাল সর্ট করা হবে)
   Stream<QuerySnapshot> getReportedUsers() {
     return _db.collection('reports')
         .where('reporterId', isEqualTo: myUid.value)
         .snapshots();
   }
 
-  // ✅ Unblock User Function
+  // ✅ Unblock User Function (Fix: Centralized Unblock)
   Future<void> unblockUser(String blockedUserId, String userName) async {
-    try {
-      await _db.collection('users')
-          .doc(myUid.value)
-          .collection('blocked_users')
-          .doc(blockedUserId)
-          .delete();
+    Get.back(); // কনফার্মেশন ডায়ালগ ক্লোজ করবে
 
-      Get.back(); // কনফার্মেশন ডায়ালগ ক্লোজ করবে
-      Get.snackbar(
-        'Unblocked ✅',
-        '$userName has been unblocked successfully.',
-        backgroundColor: Colors.green,
-        colorText: Colors.white,
-        snackPosition: SnackPosition.BOTTOM,
-      );
-    } catch (e) {
-      Get.snackbar('Error', 'Failed to unblock: $e', backgroundColor: Colors.redAccent, colorText: Colors.white);
-    }
+    // 🔥 নিজের ডিলিট লজিক বাদ দিয়ে সরাসরি SafetyController কল করা হলো (এটি ২ জায়গা থেকেই ডিলিট করবে)
+    final SafetyController safetyController = Get.put(SafetyController());
+    await safetyController.unblockUser(blockedUserId);
   }
 
   // ↩️ Undo Report Function (PRO-LEVEL: Audit Trail / Soft Delete)

@@ -91,7 +91,9 @@ class SettingsView extends StatelessWidget {
               itemBuilder: (context, index) {
                 final data = docs[index].data() as Map<String, dynamic>;
                 final String blockedUid = docs[index].id;
-                final String blockedName = data['blockedUserName'] ?? 'Unknown User';
+
+                // 🔥 Fix: 'name' ফিল্ডটি আগে চেক করা হচ্ছে, না পেলে 'blockedUserName', তাও না পেলে 'Unknown User'
+                final String blockedName = data['name'] ?? data['blockedUserName'] ?? 'Unknown User';
 
                 return Container(
                   margin: const EdgeInsets.only(bottom: 12),
@@ -145,8 +147,6 @@ class SettingsView extends StatelessWidget {
           stream: controller.getReportedUsers(),
           builder: (context, snapshot) {
 
-
-
             // Error Handling
             if (snapshot.hasError) {
               debugPrint("Reports Stream Error: ${snapshot.error}");
@@ -162,7 +162,7 @@ class SettingsView extends StatelessWidget {
               );
             }
 
-            // 🔥 Waiting State Check (অসীম লোডিং বন্ধ করার জন্য)
+            // 🔥 Waiting State Check
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const Center(child: CircularProgressIndicator(color: Colors.purpleAccent));
             }
@@ -171,13 +171,13 @@ class SettingsView extends StatelessWidget {
               return _buildEmptyState(Icons.check_circle_outline, "No Active Reports", "You haven't reported anyone recently.", Colors.blueAccent);
             }
 
-            // 🔥 UI থেকে withdrawn রিপোর্টগুলো ফিল্টার করা (ডাটাবেসে ঠিকই থাকবে)
+            // 🔥 UI থেকে withdrawn রিপোর্টগুলো ফিল্টার করা
             var activeDocs = snapshot.data!.docs.where((doc) {
               final data = doc.data() as Map<String, dynamic>;
               return data['status'] != 'withdrawn';
             }).toList();
 
-            // 🔥 Local Sorting: নতুন রিপোর্টগুলো উপরে দেখাবে
+            // 🔥 Local Sorting
             activeDocs.sort((a, b) {
               Timestamp? timeA = (a.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
               Timestamp? timeB = (b.data() as Map<String, dynamic>)['createdAt'] as Timestamp?;
