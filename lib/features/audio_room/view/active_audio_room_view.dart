@@ -5,11 +5,8 @@ import 'package:zego_uikit_prebuilt_live_audio_room/zego_uikit_prebuilt_live_aud
 import 'package:zego_uikit/zego_uikit.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:get/get.dart';
-import 'package:zego_uikit_signaling_plugin/zego_uikit_signaling_plugin.dart';
 
 import '../widgets/user_profile_sheet.dart';
-import '../../../core/controllers/safety_controller.dart';
-import '../../main_nav/view/main_nav_view.dart';
 
 class ActiveAudioRoomView extends StatefulWidget {
   final String roomId;
@@ -19,11 +16,6 @@ class ActiveAudioRoomView extends StatefulWidget {
   final String userId;
   final String userName;
   final String userAvatar;
-  final String hostId;
-
-  final bool isOfficial;
-  final String bgImage;
-  final String bgMusic;
 
   const ActiveAudioRoomView({
     Key? key,
@@ -34,10 +26,6 @@ class ActiveAudioRoomView extends StatefulWidget {
     required this.userId,
     required this.userName,
     required this.userAvatar,
-    required this.hostId,
-    this.isOfficial = false,
-    this.bgImage = '',
-    this.bgMusic = '',
   }) : super(key: key);
 
   @override
@@ -47,14 +35,12 @@ class ActiveAudioRoomView extends StatefulWidget {
 class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
   final TextEditingController _reportController = TextEditingController();
   late StreamSubscription _banSubscription;
-  late StreamSubscription _roomSubscription;
   late String safeUserId;
-  bool _roomClosedHandled = false;
 
   @override
   void initState() {
     super.initState();
-    ZegoUIKit().installPlugins([ZegoUIKitSignalingPlugin()]);
+    // 🔥 ফিক্সড: ZegoUIKit().installPlugins(...) এখান থেকে রিমুভ করা হয়েছে
 
     safeUserId = widget.userId.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
     if (safeUserId.isEmpty) {
@@ -80,42 +66,13 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
         );
       }
     });
-
-    _roomSubscription = FirebaseFirestore.instance
-        .collection('live_audio_rooms')
-        .doc(widget.roomId)
-        .snapshots()
-        .listen((snapshot) async {
-      if (!snapshot.exists && !_roomClosedHandled) {
-        _roomClosedHandled = true;
-        try {
-          await ZegoUIKit().leaveRoom();
-        } catch (_) {}
-
-        if (!mounted) return;
-        Get.offAll(() => MainNavView());
-
-        Future.delayed(const Duration(milliseconds: 300), () {
-          Get.snackbar(
-            'Room Closed 🛑',
-            'This room was closed by moderation.', // 🔥 Updated Message
-            backgroundColor: Colors.redAccent,
-            colorText: Colors.white,
-            snackPosition: SnackPosition.TOP,
-            duration: const Duration(seconds: 4),
-          );
-        });
-      }
-    });
   }
 
   @override
   void dispose() {
     _banSubscription.cancel();
-    _roomSubscription.cancel();
     _reportController.dispose();
-
-    if (widget.isHost && !widget.isOfficial && !_roomClosedHandled) {
+    if (widget.isHost) {
       FirebaseFirestore.instance.collection('live_audio_rooms').doc(widget.roomId).delete();
     }
     super.dispose();
@@ -127,17 +84,7 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
         ? ZegoUIKitPrebuiltLiveAudioRoomConfig.host()
         : ZegoUIKitPrebuiltLiveAudioRoomConfig.audience();
 
-    config.background = widget.isOfficial && widget.bgImage.isNotEmpty
-        ? Container(
-      decoration: BoxDecoration(
-        image: DecorationImage(
-          image: NetworkImage(widget.bgImage),
-          fit: BoxFit.cover,
-          colorFilter: ColorFilter.mode(Colors.black.withOpacity(0.65), BlendMode.darken),
-        ),
-      ),
-    )
-        : Stack(
+    config.background = Stack(
       children: [
         Container(
           decoration: const BoxDecoration(
@@ -189,9 +136,9 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
                       child: Container(
                         padding: const EdgeInsets.all(6),
                         decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.3),
+                          color: Colors.white.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(30),
-                          border: Border.all(color: widget.isOfficial ? Colors.amber.withOpacity(0.5) : Colors.white.withOpacity(0.2), width: 1.5),
+                          border: Border.all(color: Colors.white.withOpacity(0.2), width: 1),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
@@ -199,8 +146,12 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
                             CircleAvatar(
                               radius: 20,
                               backgroundColor: Colors.grey[800],
-                              backgroundImage: widget.roomLogo.isNotEmpty ? NetworkImage(widget.roomLogo) : null,
-                              child: widget.roomLogo.isEmpty ? const Icon(Icons.meeting_room, color: Colors.white) : null,
+                              backgroundImage: widget.roomLogo.isNotEmpty
+                                  ? NetworkImage(widget.roomLogo)
+                                  : null,
+                              child: widget.roomLogo.isEmpty
+                                  ? const Icon(Icons.meeting_room, color: Colors.white)
+                                  : null,
                             ),
                             const SizedBox(width: 10),
                             Expanded(
@@ -208,19 +159,11 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Row(
-                                    children: [
-                                      if (widget.isOfficial) const Icon(Icons.verified, color: Colors.amber, size: 14),
-                                      if (widget.isOfficial) const SizedBox(width: 4),
-                                      Expanded(
-                                        child: Text(
-                                          widget.roomName.isEmpty ? "Live Room" : widget.roomName,
-                                          style: TextStyle(color: widget.isOfficial ? Colors.amber : Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ),
-                                    ],
+                                  Text(
+                                    widget.roomName.isEmpty ? "Live Room" : widget.roomName,
+                                    style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
                                   ),
                                   Text(
                                     "ID: ${widget.roomId.replaceAll('room_', '')}",
@@ -235,7 +178,7 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
                               decoration: BoxDecoration(
-                                gradient: LinearGradient(colors: widget.isOfficial ? [Colors.amber, Colors.orange] : [Colors.pinkAccent, Colors.deepPurpleAccent]),
+                                gradient: const LinearGradient(colors: [Colors.pinkAccent, Colors.deepPurpleAccent]),
                                 borderRadius: BorderRadius.circular(20),
                               ),
                               child: const Text("Follow", style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
@@ -255,48 +198,22 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
                         icon: const Icon(Icons.more_vert, color: Colors.white, size: 20),
                         color: const Color(0xFF2C1B3D),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                        onSelected: (value) async {
-                          if (value == 'report_room') {
-                            _showRoomReportDialog(context);
-                          } else if (value == 'report_host') {
-                            _showHostReportDialog(context);
-                          } else if (value == 'block_host') {
-                            await _blockHost();
+                        onSelected: (value) {
+                          if (value == 'report') {
+                            _showReportDialog(context, safeUserId);
                           }
                         },
                         itemBuilder: (BuildContext context) => [
                           const PopupMenuItem(
-                            value: 'report_room',
+                            value: 'report',
                             child: Row(
                               children: [
-                                Icon(Icons.report_problem, color: Colors.orangeAccent, size: 18),
+                                Icon(Icons.report_problem, color: Colors.redAccent, size: 18),
                                 SizedBox(width: 10),
                                 Text('Report Room', style: TextStyle(color: Colors.white)),
                               ],
                             ),
                           ),
-                          if (!widget.isHost)
-                            const PopupMenuItem(
-                              value: 'report_host',
-                              child: Row(
-                                children: [
-                                  Icon(Icons.person_off, color: Colors.redAccent, size: 18),
-                                  SizedBox(width: 10),
-                                  Text('Report Host', style: TextStyle(color: Colors.white)),
-                                ],
-                              ),
-                            ),
-                          if (!widget.isHost)
-                            const PopupMenuItem(
-                              value: 'block_host',
-                              child: Row(
-                                children: [
-                                  Icon(Icons.block, color: Colors.redAccent, size: 18),
-                                  SizedBox(width: 10),
-                                  Text('Block Host', style: TextStyle(color: Colors.white)),
-                                ],
-                              ),
-                            ),
                         ],
                       ),
                     ),
@@ -305,26 +222,6 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
                 ),
               ],
             ),
-            if (widget.isOfficial && widget.bgMusic.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 15.0),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.black45,
-                    borderRadius: BorderRadius.circular(15),
-                    border: Border.all(color: Colors.amber.withOpacity(0.5)),
-                  ),
-                  child: const Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(Icons.music_note_rounded, color: Colors.amber, size: 16),
-                      SizedBox(width: 6),
-                      Text("Official Event BGM Playing", style: TextStyle(color: Colors.amber, fontSize: 11, fontWeight: FontWeight.bold)),
-                    ],
-                  ),
-                ),
-              )
           ],
         ),
       ),
@@ -344,6 +241,7 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
 
     config.seat.avatarBuilder = (BuildContext context, Size size, ZegoUIKitUser? user, Map<String, dynamic> extraInfo) {
       if (user == null || user.name.isEmpty) return const SizedBox();
+
       String firstLetter = user.name.trim().substring(0, 1).toUpperCase();
       bool isMe = user.id == safeUserId;
 
@@ -361,9 +259,9 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
         child: Container(
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            border: Border.all(color: isMe ? Colors.cyanAccent : (widget.isOfficial ? Colors.amber : Colors.pinkAccent).withOpacity(0.6), width: 2.5),
+            border: Border.all(color: isMe ? Colors.cyanAccent : Colors.pinkAccent.withOpacity(0.6), width: 2.5),
             boxShadow: [
-              BoxShadow(color: (isMe ? Colors.cyanAccent : (widget.isOfficial ? Colors.amber : Colors.pinkAccent)).withOpacity(0.4), blurRadius: 10, spreadRadius: 1)
+              BoxShadow(color: (isMe ? Colors.cyanAccent : Colors.pinkAccent).withOpacity(0.4), blurRadius: 10, spreadRadius: 1)
             ],
           ),
           child: CircleAvatar(
@@ -380,8 +278,8 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
 
     return Scaffold(
       body: ZegoUIKitPrebuiltLiveAudioRoom(
-        appID: 358538422,
-        appSign: '7e4ad77a5ad88a14bdbfbda739b67e9de336d5c91aa0b00672c22eecd96823fa',
+        appID: 821355461,
+        appSign: 'a8bfe76e3bc996eb2b0eb4aadfbd5537616efb5678023a9b0ec1df3d869fbf98',
         userID: safeUserId,
         userName: widget.userName.isEmpty ? "Nova User" : widget.userName,
         roomID: widget.roomId,
@@ -390,128 +288,70 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
     );
   }
 
-  void _showRoomReportDialog(BuildContext context) {
-    final SafetyController safetyController = Get.find<SafetyController>();
-    final reasons = ['Spam or Scam', 'Harassment', 'Nudity or Sexual Content', 'Hate Speech'];
-    String selectedReason = reasons.first;
+  void _showReportDialog(BuildContext context, String currentUserId) {
     _reportController.clear();
-
-    Get.defaultDialog(
-      title: "Report Room",
-      titleStyle: const TextStyle(color: Colors.orangeAccent, fontWeight: FontWeight.bold),
-      backgroundColor: const Color(0xFF1E1E1E),
-      content: StatefulBuilder(
-        builder: (context, setState) {
-          return Column(
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          backgroundColor: const Color(0xFF2C1B3D),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: const Row(
+            children: [
+              Icon(Icons.report_gmailerrorred, color: Colors.redAccent),
+              SizedBox(width: 10),
+              Text("Report Room", style: TextStyle(color: Colors.white, fontSize: 18)),
+            ],
+          ),
+          content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              DropdownButtonFormField<String>(
-                value: selectedReason,
-                dropdownColor: const Color(0xFF2C2C2C),
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: Colors.white.withOpacity(0.05),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
-                ),
-                items: reasons.map((r) => DropdownMenuItem(value: r, child: Text(r))).toList(),
-                onChanged: (v) => setState(() => selectedReason = v!),
-              ),
-              const SizedBox(height: 15),
+              const Text("Why are you reporting this room?", style: TextStyle(color: Colors.white70)),
+              const SizedBox(height: 16),
               TextField(
                 controller: _reportController,
                 style: const TextStyle(color: Colors.white),
-                maxLines: 3,
-                decoration: const InputDecoration(hintText: 'Additional details...', hintStyle: TextStyle(color: Colors.white38)),
-              ),
-            ],
-          );
-        },
-      ),
-      textConfirm: "Submit",
-      confirmTextColor: Colors.white,
-      buttonColor: Colors.orangeAccent,
-      textCancel: "Cancel",
-      onConfirm: () async {
-        await safetyController.submitReport(
-          reportedUserId: widget.hostId,
-          roomId: widget.roomId,
-          reason: selectedReason,
-          details: _reportController.text.trim().isEmpty ? 'Reported from live audio room' : _reportController.text.trim(),
-          source: 'audio_room',
-        );
-      },
-    );
-  }
-
-  void _showHostReportDialog(BuildContext context) {
-    final SafetyController safetyController = Get.find<SafetyController>();
-    final reasons = ['Bullying or harassment', 'Hate speech or symbols', 'Sexually inappropriate behavior', 'Scam or fraud', 'Spam', 'Other'];
-    String selectedReason = reasons.first;
-    _reportController.clear();
-
-    Get.defaultDialog(
-      title: "Report Host",
-      titleStyle: const TextStyle(color: Colors.redAccent, fontWeight: FontWeight.bold),
-      backgroundColor: const Color(0xFF1E1E1E),
-      content: StatefulBuilder(
-        builder: (context, setState) {
-          return Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              DropdownButtonFormField<String>(
-                value: selectedReason,
-                dropdownColor: const Color(0xFF2C2C2C),
-                style: const TextStyle(color: Colors.white),
                 decoration: InputDecoration(
+                  hintText: "Type reason here...",
+                  hintStyle: const TextStyle(color: Colors.white38),
                   filled: true,
-                  fillColor: Colors.white.withOpacity(0.05),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: BorderSide.none),
+                  fillColor: Colors.black26,
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                 ),
-                items: reasons.map((r) => DropdownMenuItem(value: r, child: Text(r))).toList(),
-                onChanged: (v) => setState(() => selectedReason = v!),
-              ),
-              const SizedBox(height: 15),
-              TextField(
-                controller: _reportController,
-                style: const TextStyle(color: Colors.white),
                 maxLines: 3,
-                decoration: const InputDecoration(hintText: 'Additional details', hintStyle: TextStyle(color: Colors.white38)),
               ),
             ],
-          );
-        },
-      ),
-      textConfirm: "Submit",
-      confirmTextColor: Colors.white,
-      buttonColor: Colors.redAccent,
-      textCancel: "Cancel",
-      onConfirm: () async {
-        await safetyController.submitReport(
-          reportedUserId: widget.hostId,
-          roomId: widget.roomId,
-          reason: selectedReason,
-          details: _reportController.text.trim().isEmpty ? 'Host reported from live audio room' : _reportController.text.trim(),
-          source: 'user_profile',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Cancel", style: TextStyle(color: Colors.white54)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.redAccent,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10))),
+              onPressed: () async {
+                if (_reportController.text.trim().isEmpty) {
+                  Get.snackbar('Error', 'Please provide a reason.', backgroundColor: Colors.redAccent, colorText: Colors.white);
+                  return;
+                }
+                Navigator.pop(context);
+
+                await FirebaseFirestore.instance.collection('reports_rooms').add({
+                  'room_id': widget.roomId,
+                  'reported_by': currentUserId,
+                  'reason': _reportController.text.trim(),
+                  'timestamp': FieldValue.serverTimestamp(),
+                });
+
+                Get.snackbar('Reported', 'Action will be taken after review. Thank you.', backgroundColor: Colors.green.withOpacity(0.8), colorText: Colors.white);
+              },
+              child: const Text("Submit", style: TextStyle(color: Colors.white)),
+            ),
+          ],
         );
       },
     );
-  }
-
-  Future<void> _blockHost() async {
-    if (widget.hostId.isEmpty || widget.hostId == safeUserId) return;
-    final SafetyController safetyController = Get.find<SafetyController>();
-
-    final success = await safetyController.blockUser(widget.hostId);
-    if (success) {
-      try {
-        await ZegoUIKit().leaveRoom();
-      } catch (_) {}
-
-      if (mounted) {
-        Get.back(); // Close Dialog
-        Get.snackbar('Host Blocked', 'You will no longer see this host or their rooms.', backgroundColor: Colors.redAccent, colorText: Colors.white);
-      }
-    }
   }
 }
