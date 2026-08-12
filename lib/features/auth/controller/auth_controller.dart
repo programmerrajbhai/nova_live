@@ -7,13 +7,20 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+
 import '../../main_nav/view/main_nav_view.dart';
-import '../../splash/banned_view.dart'; // 🔥 Import BannedView
+import '../../splash/banned_view.dart';
 
 class AuthController extends GetxController {
   final nameController = TextEditingController();
   var isAgreed = false.obs;
-  var isLoading = false.obs;
+
+  // 🔥 তিনটি আলাদা লোডিং স্টেট
+  var isGuestLoading = false.obs;
+  var isGoogleLoading = false.obs;
+  var isProfileSaving = false.obs;
+
   var selectedGender = 'Male'.obs;
   var dobString = ''.obs;
   var calculatedAge = 0.obs;
@@ -38,104 +45,197 @@ class AuthController extends GetxController {
     isAgreed.value = value ?? false;
   }
 
+  // ==========================================
+  // 🔥 Guest Login (One Tap)
+  // ==========================================
   Future<void> onOneTapLoginClicked() async {
     if (!isAgreed.value) {
       _showAgreementWarning();
       return;
     }
 
-    isLoading.value = true;
+    isGuestLoading.value = true;
     try {
       SharedPreferences prefs = await SharedPreferences.getInstance();
-
       User? authUser = FirebaseAuth.instance.currentUser;
+
       if (authUser == null) {
         final UserCredential credential = await FirebaseAuth.instance.signInAnonymously();
         authUser = credential.user;
       }
 
-      if (authUser == null) {
-        throw FirebaseAuthException(
-          code: 'anonymous-sign-in-failed',
-          message: 'Unable to create an anonymous Nova Live session.',
-        );
+      if (authUser == null) throw Exception('Unable to create session.');
+
+      await _processUserLogin(authUser, prefs, null);
+
+    } catch (e) {
+      isGuestLoading.value = false;
+      Get.snackbar('Error', 'Guest Login failed: $e', backgroundColor: Colors.redAccent, colorText: Colors.white);
+    }
+  }
+
+  // ==========================================
+  // 🔥 Google Sign-In (Smart Name Picker & Always Show Account List)
+  // ==========================================
+  Future<void> onGoogleLoginClicked() async {
+    if (!isAgreed.value) {
+      _showAgreementWarning();
+      return;
+    }
+
+    isGoogleLoading.value = true;
+    try {
+      final GoogleSignIn googleSignIn = GoogleSignIn();
+
+      // 🔥 FIX: প্রতিবার অ্যাকাউন্ট লিস্ট দেখানোর জন্য আগের ক্যাশ সেশন সাইনআউট করে নেওয়া হচ্ছে
+      await googleSignIn.signOut();
+
+      final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
+
+      if (googleUser == null) {
+        isGoogleLoading.value = false;
+        return; // ইউজার পপআপ ক্যানসেল করলে
       }
 
-      final String currentUid = authUser.uid;
-      await prefs.setString('device_linked_uid', currentUid);
+      final GoogleSignInAuthentication googleAuth = await googleUser.authentication;
+      final OAuthCredential credential = GoogleAuthProvider.credential(
+        accessToken: googleAuth.accessToken,
+        idToken: googleAuth.idToken,
+      );
 
-      final DocumentReference<Map<String, dynamic>> userRef = FirebaseFirestore.instance.collection('users').doc(currentUid);
-      final DocumentSnapshot<Map<String, dynamic>> doc = await userRef.get();
+      User? authUser = FirebaseAuth.instance.currentUser;
+      SharedPreferences prefs = await SharedPreferences.getInstance();
 
-      if (doc.exists) {
-        final Map<String, dynamic> data = doc.data() ?? <String, dynamic>{};
-
-        // 🔥 FIX 24: Banned User Login Bypass Check
-        bool isBanned = data['isBanned'] == true;
-        Timestamp? bannedUntil = data['bannedUntil'] as Timestamp?;
-
-        if (isBanned) {
-          if (bannedUntil == null || bannedUntil.toDate().isAfter(DateTime.now())) {
-            isLoading.value = false;
-            String banReason = data['banReason'] ?? 'Violation of Terms & Policies';
-            String banType = data['banType'] ?? 'Account Suspension'; // 🔥 Fixed Missing Arguments
-
-            Get.offAll(() => BannedView(banReason: banReason, banType: banType));
-            return; // 🛑 ব্যানড ইউজার হলে আর সামনে এগোবে না
+      if (authUser != null && authUser.isAnonymous) {
+        try {
+          final UserCredential userCredential = await authUser.linkWithCredential(credential);
+          authUser = userCredential.user;
+        } on FirebaseAuthException catch (e) {
+          if (e.code == 'credential-already-in-use') {
+            final UserCredential userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
+            authUser = userCredential.user;
+          } else {
+            rethrow;
           }
         }
+      } else {
+        final UserCredential userCredential = await FirebaseAuth.instance.signInWithCredential(credential);
+        authUser = userCredential.user;
+      }
 
-        final bool verified = data['ageVerified'] == true;
-        final String dob = (data['dob'] ?? '').toString().trim();
+      if (authUser == null) throw Exception("Authentication failed");
 
-        if (!verified || dob.isEmpty) {
-          isLoading.value = false;
-          nameController.text = (data['name'] ?? '').toString();
-          selectedGender.value = (data['gender'] ?? 'Male').toString();
-          final String savedAvatar = (data['avatar'] ?? '').toString();
-          selectedAvatar.value = savedAvatar.isNotEmpty ? savedAvatar : defaultAvatars.first;
-          selectedLocalImagePath.value = '';
-          dobString.value = '';
-          calculatedAge.value = 0;
-          ageVerified.value = false;
+      // 🔥 প্রফেশনাল নেম এক্সট্রাক্টর (যদি নাম না থাকে ইমেইল থেকে নেবে)
+      String extractedName = googleUser.displayName ?? '';
+      if (extractedName.trim().isEmpty && googleUser.email.contains('@')) {
+        extractedName = googleUser.email.split('@').first;
+      }
+      // নামের প্রথম অক্ষর বড় হাতের করা হচ্ছে
+      if (extractedName.isNotEmpty) {
+        extractedName = extractedName[0].toUpperCase() + extractedName.substring(1);
+      }
 
-          Get.snackbar('Age Verification Required', 'Please confirm your date of birth to continue.', snackPosition: SnackPosition.TOP, backgroundColor: Colors.orangeAccent, colorText: Colors.black);
-          _showProfileSetupSheet();
+      await _processUserLogin(authUser, prefs, {
+        'name': extractedName,
+        'photoUrl': googleUser.photoUrl,
+      });
+
+    } catch (e) {
+      isGoogleLoading.value = false;
+      Get.snackbar('Error', 'Google Sign-In failed. Check SHA-1/Internet.', backgroundColor: Colors.redAccent, colorText: Colors.white);
+      debugPrint("Google Login Error: $e");
+    }
+  }
+
+  // ==========================================
+  // 🔥 Universal Login Processor (Handles Policies & Bans)
+  // ==========================================
+  Future<void> _processUserLogin(User authUser, SharedPreferences prefs, Map<String, dynamic>? googleData) async {
+    final String currentUid = authUser.uid;
+    await prefs.setString('device_linked_uid', currentUid);
+
+    final DocumentReference<Map<String, dynamic>> userRef = FirebaseFirestore.instance.collection('users').doc(currentUid);
+    final DocumentSnapshot<Map<String, dynamic>> doc = await userRef.get();
+
+    if (doc.exists) {
+      final Map<String, dynamic> data = doc.data() ?? <String, dynamic>{};
+
+      bool isBanned = data['isBanned'] == true;
+      Timestamp? bannedUntil = data['bannedUntil'] as Timestamp?;
+
+      if (isBanned) {
+        if (bannedUntil == null || bannedUntil.toDate().isAfter(DateTime.now())) {
+          _stopLoaders();
+          String banReason = data['banReason'] ?? 'Violation of Terms & Policies';
+          String banType = data['banType'] ?? 'Account Suspension';
+          Get.offAll(() => BannedView(banReason: banReason, banType: banType));
           return;
         }
-
-        final bool termsAccepted = data['termsAccepted'] == true;
-        final String acceptedVersion = (data['policyVersion'] ?? '').toString();
-
-        if (!termsAccepted || acceptedVersion != currentPolicyVersion) {
-          await userRef.update({
-            'termsAccepted': true,
-            'communityAccepted': true,
-            'policyVersion': currentPolicyVersion,
-            'termsAcceptedAt': FieldValue.serverTimestamp(),
-          });
-        }
-
-        await prefs.setBool('hasAccount', true);
-        await prefs.setBool('isLoggedIn', true);
-        await prefs.setString('uid', currentUid);
-        await prefs.setString('userName', (data['name'] ?? 'Nova User').toString());
-        await prefs.setBool('ugcAccepted', true);
-        await prefs.setBool('ageVerified', true);
-        await prefs.setString('policyVersion', currentPolicyVersion);
-
-        isLoading.value = false;
-        await _checkPermissionsAndNavigate();
-      } else {
-        isLoading.value = false;
-        _resetForm();
-        _showProfileSetupSheet();
       }
-    } catch (e) {
-      isLoading.value = false;
-      Get.snackbar('Error', 'Login failed: $e', backgroundColor: Colors.redAccent, colorText: Colors.white);
-      debugPrint("One Tap Login Error: $e");
+
+      final bool verified = data['ageVerified'] == true;
+      final String dob = (data['dob'] ?? '').toString().trim();
+
+      if (!verified || dob.isEmpty) {
+        _stopLoaders();
+        nameController.text = (data['name'] ?? googleData?['name'] ?? '').toString();
+        selectedGender.value = (data['gender'] ?? 'Male').toString();
+
+        final String savedAvatar = (data['avatar'] ?? '').toString();
+        selectedAvatar.value = savedAvatar.isNotEmpty ? savedAvatar : (googleData?['photoUrl'] ?? defaultAvatars.first);
+
+        selectedLocalImagePath.value = '';
+        dobString.value = '';
+        calculatedAge.value = 0;
+        ageVerified.value = false;
+
+        Get.snackbar('Verification Required', 'Please confirm your details to continue.', snackPosition: SnackPosition.TOP, backgroundColor: Colors.orangeAccent, colorText: Colors.black);
+        _showProfileSetupSheet();
+        return;
+      }
+
+      final bool termsAccepted = data['termsAccepted'] == true;
+      final String acceptedVersion = (data['policyVersion'] ?? '').toString();
+
+      if (!termsAccepted || acceptedVersion != currentPolicyVersion) {
+        await userRef.update({
+          'termsAccepted': true,
+          'communityAccepted': true,
+          'policyVersion': currentPolicyVersion,
+          'termsAcceptedAt': FieldValue.serverTimestamp(),
+        });
+      }
+
+      await prefs.setBool('hasAccount', true);
+      await prefs.setBool('isLoggedIn', true);
+      await prefs.setString('uid', currentUid);
+      await prefs.setString('userName', (data['name'] ?? googleData?['name'] ?? 'Nova User').toString());
+      await prefs.setBool('ugcAccepted', true);
+      await prefs.setBool('ageVerified', true);
+      await prefs.setString('policyVersion', currentPolicyVersion);
+
+      _stopLoaders();
+      await _checkPermissionsAndNavigate();
+
+    } else {
+      _stopLoaders();
+      _resetForm();
+
+      if (googleData != null) {
+        nameController.text = googleData['name'] ?? '';
+        if (googleData['photoUrl'] != null) {
+          selectedAvatar.value = googleData['photoUrl'];
+        }
+      }
+
+      _showProfileSetupSheet();
     }
+  }
+
+  void _stopLoaders() {
+    isGuestLoading.value = false;
+    isGoogleLoading.value = false;
+    isProfileSaving.value = false;
   }
 
   void _showAgreementWarning() {
@@ -361,8 +461,8 @@ class AuthController extends GetxController {
                   elevation: 5,
                   shadowColor: Colors.purpleAccent.withOpacity(0.4),
                 ),
-                onPressed: isLoading.value ? null : _validateAndJoin,
-                child: isLoading.value
+                onPressed: isProfileSaving.value ? null : _validateAndJoin,
+                child: isProfileSaving.value
                     ? const CircularProgressIndicator(color: Colors.white)
                     : const Text('Join Now', style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
               ),
@@ -381,7 +481,7 @@ class AuthController extends GetxController {
     if (dobString.value.isEmpty) { Get.snackbar('Error', 'Please select your Date of Birth.', backgroundColor: Colors.orangeAccent, colorText: Colors.black); return; }
     if (calculatedAge.value < 18) { Get.snackbar('Access Denied 🛑', 'You must be at least 18 years old.', snackPosition: SnackPosition.TOP, backgroundColor: Colors.redAccent, colorText: Colors.white); return; }
 
-    isLoading.value = true;
+    isProfileSaving.value = true;
     try {
       User? currentUser = FirebaseAuth.instance.currentUser;
       String uid;
@@ -443,11 +543,11 @@ class AuthController extends GetxController {
       await prefs.setBool('ageVerified', true);
       await prefs.setString('policyVersion', currentPolicyVersion);
 
-      isLoading.value = false;
+      isProfileSaving.value = false;
       Get.back();
       _checkPermissionsAndNavigate();
     } catch (e) {
-      isLoading.value = false;
+      isProfileSaving.value = false;
       Get.snackbar('Error', 'Failed to save data: $e', backgroundColor: Colors.redAccent, colorText: Colors.white);
     }
   }

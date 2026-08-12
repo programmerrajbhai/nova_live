@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/gestures.dart';
 import 'package:get/get.dart';
+import 'package:font_awesome_flutter/font_awesome_flutter.dart';
 
 import '../controller/auth_controller.dart';
 import '../../legal/view/legal_views.dart';
@@ -66,6 +67,12 @@ class LoginView extends StatelessWidget {
 
                     const SizedBox(height: 20),
 
+                    // 🔥 Google Login Button (Uses isGoogleLoading)
+                    _buildGoogleLoginButton(),
+
+                    const SizedBox(height: 15),
+
+                    // 🔥 Guest Login Button (Uses isGuestLoading)
                     _buildLoginButton(),
 
                     const SizedBox(height: 15),
@@ -231,9 +238,74 @@ class LoginView extends StatelessWidget {
     );
   }
 
+  // ==========================================
+  // 🔥 Google Login Button
+  // ==========================================
+  Widget _buildGoogleLoginButton() {
+    return Obx(() {
+      final loading = controller.isGoogleLoading.value; // 🔥 Specific Loading State
+
+      return GestureDetector(
+        onTap: loading ? null : controller.onGoogleLoginClicked,
+        child: AnimatedOpacity(
+          opacity: loading ? 0.75 : 1,
+          duration: const Duration(milliseconds: 180),
+          child: Container(
+            width: double.infinity,
+            height: 60,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(19),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.2),
+                  blurRadius: 15,
+                  offset: const Offset(0, 5),
+                ),
+              ],
+            ),
+            child: Center(
+              child: loading
+                  ? const SizedBox(
+                width: 25,
+                height: 25,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  color: Colors.purpleAccent,
+                ),
+              )
+                  : const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    FontAwesomeIcons.google,
+                    color: Colors.black87,
+                    size: 24,
+                  ),
+                  SizedBox(width: 12),
+                  Text(
+                    'Continue with Google',
+                    style: TextStyle(
+                      color: Colors.black87,
+                      fontSize: 17,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    });
+  }
+
+  // ==========================================
+  // 🔥 Guest Login Button
+  // ==========================================
   Widget _buildLoginButton() {
     return Obx(() {
-      final loading = controller.isLoading.value;
+      final loading = controller.isGuestLoading.value; // 🔥 Specific Loading State
 
       return GestureDetector(
         onTap: loading ? null : controller.onOneTapLoginClicked,
@@ -280,7 +352,7 @@ class LoginView extends StatelessWidget {
                   ),
                   SizedBox(width: 9),
                   Text(
-                    'Continue to Nova Live',
+                    'Continue as Guest',
                     style: TextStyle(
                       color: Colors.white,
                       fontSize: 18,

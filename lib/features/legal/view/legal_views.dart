@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
-const String novaSupportEmail = 'REPLACE_WITH_REAL_SUPPORT_EMAIL';
-const String policyLastUpdated = 'August 4, 2026';
+// 🔥 আপনার সাপোর্ট ইমেইল এবং বর্তমান তারিখ আপডেট করা হলো
+const String novaSupportEmail = 'technovasoft686@outlook.com';
+const String policyLastUpdated = 'August 12, 2026';
 
 class PrivacyPolicyView extends StatelessWidget {
   const PrivacyPolicyView({super.key});
@@ -12,96 +13,80 @@ class PrivacyPolicyView extends StatelessWidget {
     return const LegalDocumentView(
       title: 'Privacy Policy',
       icon: Icons.privacy_tip_rounded,
-      subtitle: 'How Nova Live handles and protects your information.',
+      subtitle: 'How Nova Live collects, uses, and protects your information.',
       sections: [
         LegalSection(
           icon: Icons.person_outline_rounded,
           title: 'Information We Collect',
           content:
-          'Nova Live may collect your nickname, date of birth, gender, '
-              'profile image, account identifier, profile information, chat '
-              'messages, reports, block records, room activity and other '
-              'information you choose to provide.',
+          'Nova Live collects information to provide and improve our services. '
+              'This includes data from Google Sign-In (Name, Email, Profile Picture), '
+              'your generated account identifier (Firebase UID), nickname, date of birth, '
+              'gender, chat messages, live room activities, and moderation records (reports/blocks).',
         ),
         LegalSection(
-          icon: Icons.calendar_month_rounded,
-          title: 'Age Information',
+          icon: Icons.verified_user_rounded, // 🔥 ফিক্স করা হয়েছে (আগে Icons.18_up_rating... ছিল)
+          title: 'Age Requirements (18+)',
           content:
-          'Nova Live is intended only for users who are at least 18 years '
-              'old. Date-of-birth information is used to determine eligibility '
-              'and support platform safety.',
+          'Nova Live is strictly intended for users who are at least 18 years old. '
+              'Date of birth is collected during onboarding to verify age eligibility and '
+              'enforce child safety standards. Underage accounts will be terminated immediately.',
         ),
         LegalSection(
-          icon: Icons.mic_rounded,
-          title: 'Microphone',
+          icon: Icons.perm_device_information_rounded,
+          title: 'Device Permissions',
           content:
-          'Microphone access is used when you join live audio rooms or '
-              'voice communication features. Permission should only be '
-              'requested when the feature needs it.',
+          'We request Microphone access for live audio rooms and voice matching. '
+              'Camera and Photo Library access is requested strictly for updating your '
+              'profile avatar, room logos, and video matching. We only access media you '
+              'explicitly choose to upload or stream.',
         ),
         LegalSection(
-          icon: Icons.camera_alt_rounded,
-          title: 'Camera and Photos',
+          icon: Icons.cloud_done_outlined,
+          title: 'Third-Party Services',
           content:
-          'Camera or photo access may be used for profile images, room '
-              'images and supported video features. Nova Live does not access '
-              'your media without an action initiated by you.',
+          'We use Google Firebase (Authentication, Firestore, Storage) for backend infrastructure, '
+              'Google Sign-In for secure login, ZEGOCLOUD for real-time video/audio communication, '
+              'and Google Mobile Ads for advertising. These providers process data according to '
+              'their own privacy policies to operate the app.',
         ),
         LegalSection(
-          icon: Icons.cloud_outlined,
-          title: 'Firebase Services',
+          icon: Icons.data_usage_rounded,
+          title: 'How We Use Your Data',
           content:
-          'Nova Live uses Firebase services for authentication, database '
-              'storage, media storage and related app functionality. Data may '
-              'be processed by these service providers to operate the app.',
-        ),
-        LegalSection(
-          icon: Icons.live_tv_rounded,
-          title: 'Live Communication Services',
-          content:
-          'Nova Live uses third-party real-time communication technology, '
-              'including ZEGOCLOUD, to provide audio rooms and communication '
-              'features. Media and technical data may be processed as required '
-              'to deliver those services.',
-        ),
-        LegalSection(
-          icon: Icons.ads_click_rounded,
-          title: 'Advertising',
-          content:
-          'Nova Live may use Google Mobile Ads. Advertising providers may '
-              'process advertising identifiers, device information, ad '
-              'interactions and diagnostic information according to their '
-              'own policies and your available consent choices.',
+          'Your data is used to operate your account, facilitate live matching and audio rooms, '
+              'display personalized ads, provide customer support, and enforce our Community Guidelines. '
+              'We do not sell your personal data to third parties.',
         ),
         LegalSection(
           icon: Icons.gavel_rounded,
-          title: 'Moderation and Safety',
+          title: 'Safety & Moderation',
           content:
-          'Messages, profiles, rooms and reports may be processed to '
-              'detect abuse, enforce Community Guidelines, investigate '
-              'complaints and protect users.',
+          'To ensure a safe environment, user profiles, chat messages, and room activities '
+              'may be monitored or reviewed if reported by other users. Violations of our policies '
+              'will lead to warnings, temporary suspensions, or permanent bans.',
         ),
         LegalSection(
           icon: Icons.delete_forever_rounded,
-          title: 'Account Deletion',
+          title: 'Data Retention & Account Deletion',
           content:
-          'You can request permanent account deletion from the app. Nova '
-              'Live will delete or anonymize associated data unless retention '
-              'is required for security, fraud prevention, legal compliance '
-              'or resolving active reports.',
+          'You can permanently delete your account directly from the app settings. '
+              'Upon deletion, your personal profile data is removed. However, certain moderation '
+              'records (like ban history or active reports) may be retained for security, '
+              'fraud prevention, and legal compliance.',
         ),
         LegalSection(
           icon: Icons.security_rounded,
           title: 'Security',
           content:
-          'We use reasonable technical and organizational safeguards. '
-              'However, no internet service can guarantee absolute security.',
+          'We use reasonable technical and organizational safeguards to protect your data. '
+              'However, no internet service can guarantee 100% absolute security.',
         ),
         LegalSection(
           icon: Icons.mail_outline_rounded,
-          title: 'Privacy Contact',
+          title: 'Contact Us',
           content:
-          'Questions or requests concerning privacy can be sent to:\n'
+          'If you have questions or requests concerning your privacy and data, please contact our support team at:\n'
               '$novaSupportEmail',
         ),
       ],
@@ -487,16 +472,16 @@ class LegalDocumentView extends StatelessWidget {
         borderRadius: BorderRadius.circular(26),
         gradient: LinearGradient(
           colors: [
-            accentColor.withValues(alpha: 0.25),
+            accentColor.withOpacity(0.25),
             const Color(0xFF16172A),
           ],
         ),
         border: Border.all(
-          color: accentColor.withValues(alpha: 0.35),
+          color: accentColor.withOpacity(0.35),
         ),
         boxShadow: [
           BoxShadow(
-            color: accentColor.withValues(alpha: 0.14),
+            color: accentColor.withOpacity(0.14),
             blurRadius: 28,
             spreadRadius: 2,
           ),
@@ -509,9 +494,9 @@ class LegalDocumentView extends StatelessWidget {
             height: 72,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: accentColor.withValues(alpha: 0.16),
+              color: accentColor.withOpacity(0.16),
               border: Border.all(
-                color: accentColor.withValues(alpha: 0.45),
+                color: accentColor.withOpacity(0.45),
               ),
             ),
             child: Icon(icon, color: accentColor, size: 38),
@@ -531,7 +516,7 @@ class LegalDocumentView extends StatelessWidget {
             subtitle,
             textAlign: TextAlign.center,
             style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.68),
+              color: Colors.white.withOpacity(0.68),
               height: 1.5,
               fontSize: 14,
             ),
@@ -543,7 +528,7 @@ class LegalDocumentView extends StatelessWidget {
               vertical: 7,
             ),
             decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.25),
+              color: Colors.black.withOpacity(0.25),
               borderRadius: BorderRadius.circular(30),
             ),
             child: const Text(
@@ -586,7 +571,7 @@ class LegalDocumentView extends StatelessWidget {
         Text(
           'Safety • Privacy • Respect',
           style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.45),
+            color: Colors.white.withOpacity(0.45),
             fontSize: 12,
           ),
         ),
@@ -632,10 +617,10 @@ class _LegalSectionCard extends StatelessWidget {
       ),
       child: Container(
         decoration: BoxDecoration(
-          color: const Color(0xFF161725).withValues(alpha: 0.94),
+          color: const Color(0xFF161725).withOpacity(0.94),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
-            color: effectiveColor.withValues(alpha: 0.22),
+            color: effectiveColor.withOpacity(0.22),
           ),
         ),
         child: ExpansionTile(
@@ -650,7 +635,7 @@ class _LegalSectionCard extends StatelessWidget {
             width: 44,
             height: 44,
             decoration: BoxDecoration(
-              color: effectiveColor.withValues(alpha: 0.13),
+              color: effectiveColor.withOpacity(0.13),
               borderRadius: BorderRadius.circular(13),
             ),
             child: Icon(
@@ -673,7 +658,7 @@ class _LegalSectionCard extends StatelessWidget {
               child: Text(
                 section.content,
                 style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.72),
+                  color: Colors.white.withOpacity(0.72),
                   height: 1.65,
                   fontSize: 13.5,
                 ),
