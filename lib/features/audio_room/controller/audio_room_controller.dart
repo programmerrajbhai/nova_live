@@ -7,6 +7,9 @@ import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+// 🔥 ZegoConfigController ইমপোর্ট করুন (আপনার পাথ অনুযায়ী ঠিক করে নেবেন)
+import '../../../core/controllers/zego_config_controller.dart';
+
 import '../model/audio_room_model.dart';
 import '../view/active_audio_room_view.dart';
 
@@ -19,7 +22,7 @@ class AudioRoomController extends GetxController {
   var isCreatingRoom = false.obs;
   var pickedLogoPath = ''.obs;
 
-  // 🔥 ফিক্সড: ফায়ারবেস ডেটা লোড হয়েছে কিনা তা চেক করার ফ্ল্যাগ
+  // ফায়ারবেস ডেটা লোড হয়েছে কিনা তা চেক করার ফ্ল্যাগ
   var isUserReady = false.obs;
 
   XFile? pickedLogo;
@@ -44,7 +47,7 @@ class AudioRoomController extends GetxController {
       }
     }
 
-    // 🔥 ডেটা লোড শেষ হলে ইউজার রেডি
+    // ডেটা লোড শেষ হলে ইউজার রেডি
     isUserReady.value = true;
   }
 
@@ -86,7 +89,19 @@ class AudioRoomController extends GetxController {
   }
 
   Future<void> startMyRoom(String customRoomName) async {
-    // 🔥 ফিক্সড: ইউজার ডেটা লোড না হলে রুম খুলবে না
+    // 🔥 ডায়নামিক Zego কনফিগারেশন চেক
+    final zegoConfig = Get.find<ZegoConfigController>();
+    if (!zegoConfig.isConfigLoaded.value || zegoConfig.appId.value == 0) {
+      Get.snackbar(
+        'System Updating',
+        'Live servers are currently updating. Please try again in a few seconds.',
+        backgroundColor: Colors.orangeAccent,
+        colorText: Colors.black,
+      );
+      return;
+    }
+
+    // ইউজার ডেটা লোড না হলে রুম খুলবে না
     if (!isUserReady.value || myUid.value.isEmpty) {
       Get.snackbar(
         'Please wait',
@@ -146,7 +161,19 @@ class AudioRoomController extends GetxController {
   }
 
   void joinRoom(String roomId, String roomName, String roomLogo) {
-    // 🔥 ফিক্সড: ইউজার ডেটা লোড না হলে রুমে জয়েন করবে না
+    // 🔥 ডায়নামিক Zego কনফিগারেশন চেক
+    final zegoConfig = Get.find<ZegoConfigController>();
+    if (!zegoConfig.isConfigLoaded.value || zegoConfig.appId.value == 0) {
+      Get.snackbar(
+        'System Updating',
+        'Live servers are currently updating. Please try again in a few seconds.',
+        backgroundColor: Colors.orangeAccent,
+        colorText: Colors.black,
+      );
+      return;
+    }
+
+    // ইউজার ডেটা লোড না হলে রুমে জয়েন করবে না
     if (!isUserReady.value || myUid.value.isEmpty) {
       Get.snackbar(
         'Please wait',

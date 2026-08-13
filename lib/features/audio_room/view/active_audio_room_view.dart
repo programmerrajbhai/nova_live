@@ -1,10 +1,13 @@
 import 'dart:async';
 import 'dart:ui';
-import 'package:flutter/material.dart';
+import 'package:flutter/material.dart'; // 🔥 এই ইমপোর্টটি মিসিং ছিল!
 import 'package:zego_uikit_prebuilt_live_audio_room/zego_uikit_prebuilt_live_audio_room.dart';
 import 'package:zego_uikit/zego_uikit.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:get/get.dart';
+
+// 🔥 ZegoConfigController এর সঠিক পাথ (আপনার প্রজেক্ট অনুযায়ী)
+import '../../../core/controllers/zego_config_controller.dart';
 
 import '../widgets/user_profile_sheet.dart';
 
@@ -40,7 +43,6 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
   @override
   void initState() {
     super.initState();
-    // 🔥 ফিক্সড: ZegoUIKit().installPlugins(...) এখান থেকে রিমুভ করা হয়েছে
 
     safeUserId = widget.userId.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '');
     if (safeUserId.isEmpty) {
@@ -101,7 +103,8 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
           child: Container(
             width: 200,
             height: 200,
-            decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.pinkAccent.withOpacity(0.15)),
+            // 🔥 withOpacity এর বদলে withValues(alpha: ...) ব্যবহার করে Warning ফিক্স করা হলো
+            decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.pinkAccent.withValues(alpha: 0.15)),
             child: BackdropFilter(filter: ImageFilter.blur(sigmaX: 50, sigmaY: 50), child: Container(color: Colors.transparent)),
           ),
         ),
@@ -111,7 +114,7 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
           child: Container(
             width: 250,
             height: 250,
-            decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.cyanAccent.withOpacity(0.1)),
+            decoration: BoxDecoration(shape: BoxShape.circle, color: Colors.cyanAccent.withValues(alpha: 0.1)),
             child: BackdropFilter(filter: ImageFilter.blur(sigmaX: 50, sigmaY: 50), child: Container(color: Colors.transparent)),
           ),
         ),
@@ -136,9 +139,9 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
                       child: Container(
                         padding: const EdgeInsets.all(6),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.1),
+                          color: Colors.white.withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(30),
-                          border: Border.all(color: Colors.white.withOpacity(0.2), width: 1),
+                          border: Border.all(color: Colors.white.withValues(alpha: 0.2), width: 1),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
@@ -193,7 +196,7 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
                 Row(
                   children: [
                     Container(
-                      decoration: BoxDecoration(color: Colors.white.withOpacity(0.1), shape: BoxShape.circle),
+                      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.1), shape: BoxShape.circle),
                       child: PopupMenuButton<String>(
                         icon: const Icon(Icons.more_vert, color: Colors.white, size: 20),
                         color: const Color(0xFF2C1B3D),
@@ -259,9 +262,9 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
         child: Container(
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            border: Border.all(color: isMe ? Colors.cyanAccent : Colors.pinkAccent.withOpacity(0.6), width: 2.5),
+            border: Border.all(color: isMe ? Colors.cyanAccent : Colors.pinkAccent.withValues(alpha: 0.6), width: 2.5),
             boxShadow: [
-              BoxShadow(color: (isMe ? Colors.cyanAccent : Colors.pinkAccent).withOpacity(0.4), blurRadius: 10, spreadRadius: 1)
+              BoxShadow(color: (isMe ? Colors.cyanAccent : Colors.pinkAccent).withValues(alpha: 0.4), blurRadius: 10, spreadRadius: 1)
             ],
           ),
           child: CircleAvatar(
@@ -276,10 +279,12 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
       );
     };
 
+    final zegoConfig = Get.find<ZegoConfigController>();
+
     return Scaffold(
       body: ZegoUIKitPrebuiltLiveAudioRoom(
-        appID: 821355461,
-        appSign: 'a8bfe76e3bc996eb2b0eb4aadfbd5537616efb5678023a9b0ec1df3d869fbf98',
+        appID: zegoConfig.appId.value,
+        appSign: zegoConfig.appSign.value,
         userID: safeUserId,
         userName: widget.userName.isEmpty ? "Nova User" : widget.userName,
         roomID: widget.roomId,
@@ -345,7 +350,7 @@ class _ActiveAudioRoomViewState extends State<ActiveAudioRoomView> {
                   'timestamp': FieldValue.serverTimestamp(),
                 });
 
-                Get.snackbar('Reported', 'Action will be taken after review. Thank you.', backgroundColor: Colors.green.withOpacity(0.8), colorText: Colors.white);
+                Get.snackbar('Reported', 'Action will be taken after review. Thank you.', backgroundColor: Colors.green.withValues(alpha: 0.8), colorText: Colors.white);
               },
               child: const Text("Submit", style: TextStyle(color: Colors.white)),
             ),

@@ -1,6 +1,8 @@
 import java.util.Properties
 import java.io.FileInputStream
 
+
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
@@ -19,6 +21,10 @@ val keystorePropertiesFile = rootProject.file("key.properties")
 if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
+
+
+
+
 
 android {
     namespace = "com.novatechsoft.nova_live"
@@ -42,31 +48,45 @@ android {
 
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+
+        // 🔥 এই লাইনটি যুক্ত করুন (শুধু ইংরেজি ও বাংলা সাপোর্ট রাখবে)
+        resourceConfigurations.addAll(listOf("en", "bn"))
+
+
+
+
     }
+
+
 
     signingConfigs {
         create("release") {
             if (keystorePropertiesFile.exists()) {
                 keyAlias = keystoreProperties["keyAlias"] as String
                 keyPassword = keystoreProperties["keyPassword"] as String
-
-                storeFile = keystoreProperties["storeFile"]?.let {
-                    file(it as String)
-                }
-
+                storeFile = file(keystoreProperties["storeFile"] as String)
                 storePassword = keystoreProperties["storePassword"] as String
             }
         }
     }
 
-
-
     buildTypes {
-        release {
-            // এখন release build আর debug key ব্যবহার করবে না
+        getByName("release") {
             signingConfig = signingConfigs.getByName("release")
+
+
+            isMinifyEnabled = true // 🔥 অব্যবহৃত কোড রিমুভ করবে
+            isShrinkResources = true // 🔥 অব্যবহৃত ছবি বা রিসোর্স রিমুভ করবে
+
+
         }
+
+
     }
+
+
+
+
 }
 
 
