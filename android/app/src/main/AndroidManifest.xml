@@ -18,7 +18,7 @@
 
 
     <application
-        android:label="Nova Live"
+        android:label="Nova Mate"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         android:supportsPictureInPicture="true"
